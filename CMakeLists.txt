@@ -8,7 +8,31 @@ project(Mocktail
 
 include(GNUInstallDirs)
 find_package(Threads REQUIRED)
-find_package(JNI REQUIRED)
+
+# Mocktail implements its own pseudo-JVM. It needs only the JNI headers,
+# not libjvm, AWT, or a host Java runtime.
+set(_MOCKTAIL_JNI_HINTS
+  "\${ENV}{JAVA_HOME}/include"
+  "/usr/lib/jvm/default-java/include")
+file(GLOB _MOCKTAIL_JNI_GLOB "/usr/lib/jvm/*/include")
+list(APPEND _MOCKTAIL_JNI_HINTS \${_MOCKTAIL_JNI_GLOB})
+
+find_path(MOCKTAIL_JNI_INCLUDE_DIR
+  NAMES jni.h
+  HINTS \${_MOCKTAIL_JNI_HINTS})
+find_path(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
+  NAMES jni_md.h
+  HINTS \${MOCKTAIL_JNI_INCLUDE_DIR}
+  PATH_SUFFIXES linux)
+if(NOT MOCKTAIL_JNI_INCLUDE_DIR OR NOT MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR)
+  message(FATAL_ERROR
+    "JNI headers are required (jni.h and jni_md.h). "
+    "Install a JDK development package such as default-jdk-headless "
+    "or set JAVA_HOME.")
+endif()
+set(MOCKTAIL_JNI_INCLUDE_DIRS
+  \${MOCKTAIL_JNI_INCLUDE_DIR}
+  \${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -35,7 +59,7 @@ if(MOCKTAIL_ENABLE_UPSTREAM_JNIVM)
 
   add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_include_directories(jnivm PRIVATE ${JNI_INCLUDE_DIRS})
+    target_include_directories(jnivm PRIVATE ${MOCKTAIL_JNI_INCLUDE_DIRS})
     target_compile_options(jnivm PRIVATE -include string)
   endif()
   target_link_libraries(jnivm PUBLIC Threads::Threads)
@@ -68,7 +92,7 @@ add_library(Mocktail::BionicStdio ALIAS mocktail_bionic_stdio_runtime)
 
 add_library(mocktail_legacy_jnivm STATIC src/jnivm/jnivm.cc)
 target_include_directories(mocktail_legacy_jnivm PUBLIC
-  include ${JNI_INCLUDE_DIRS})
+  include ${MOCKTAIL_JNI_INCLUDE_DIRS})
 target_link_libraries(mocktail_legacy_jnivm PUBLIC Threads::Threads)
 mocktail_apply_compile_options(mocktail_legacy_jnivm)
 add_library(Mocktail::LegacyJni ALIAS mocktail_legacy_jnivm)
@@ -88,7 +112,7 @@ add_library(mocktail_runtime STATIC
   src/runtime/runtime_paths.cc
   src/runtime/startup_state_machine.cc
 )
-target_include_directories(mocktail_runtime PUBLIC include ${JNI_INCLUDE_DIRS})
+target_include_directories(mocktail_runtime PUBLIC include ${MOCKTAIL_JNI_INCLUDE_DIRS})
 target_include_directories(mocktail_runtime PRIVATE
   src)
 target_link_libraries(mocktail_runtime PUBLIC Threads::Threads)
