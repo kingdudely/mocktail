@@ -269,6 +269,7 @@ target_link_libraries(roblox PRIVATE
 mocktail_apply_compile_options(roblox)
 target_link_options(roblox PRIVATE -Wl,--export-dynamic)
 set_target_properties(roblox PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
   BUILD_RPATH "\$ORIGIN"
   INSTALL_RPATH "\$ORIGIN;$ORIGIN/${CMAKE_INSTALL_LIBDIR}/mocktail")
 
