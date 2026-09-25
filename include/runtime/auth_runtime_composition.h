@@ -1,7 +1,6 @@
 #ifndef MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
 #define MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_
 
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -9,16 +8,7 @@
 
 #include "jnivm/jnivm.h"
 
-namespace mocktail {
-namespace services {
-class AuthService;
-class HttpClient;
-}  // namespace services
-
-namespace runtime {
-
-class Environment;
-class RuntimePaths;
+namespace mocktail::runtime {
 
 enum class AuthRuntimeStatus {
   kAuthenticated,
@@ -27,7 +17,6 @@ enum class AuthRuntimeStatus {
   kUnavailable,
 };
 
-// Move-only credential storage that clears its allocation. Never log its view.
 class SecureRobloxCredential final {
  public:
   SecureRobloxCredential() = default;
@@ -51,8 +40,6 @@ class SecureRobloxCredential final {
 
 void SecurelyClearString(std::string* value);
 
-// Must be created after the credential reaches its final address and destroyed
-// before the credential or VM. Guest bindings block legacy env/disk fallback.
 class ScopedRobloxCredentialBinding final {
  public:
   ScopedRobloxCredentialBinding(jnivm::VM* jni_vm,
@@ -70,40 +57,23 @@ class ScopedRobloxCredentialBinding final {
 
  private:
   static jnivm::RobloxCredentialView ProvideCredential(const void* context);
-
   jnivm::VM* jni_vm_ = nullptr;
 };
 
-// Retains the validated credential without reopening its source.
 struct AuthRuntimeComposition {
   AuthRuntimeStatus status = AuthRuntimeStatus::kUnavailable;
   std::shared_ptr<jnivm::VM> jni_vm;
   jnivm::RobloxAuthIdentity account_identity;
   SecureRobloxCredential credential;
-  long http_status = 0;
-  bool rejected_credential_retired = false;
   std::string error;
 
   explicit operator bool() const { return jni_vm != nullptr; }
 };
 
-// A VM requires authentication or explicit guest mode. HTTP 401/403 clears
-// only Mocktail's managed credential.
-AuthRuntimeComposition ComposeAuthRuntime(const Environment& environment,
-                                          const RuntimePaths& paths,
-                                          services::AuthService& auth_service);
+// The minimal launcher does not validate or persist the cookie. It binds the
+// supplied credential directly to the pseudo-JVM used by libroblox.so.
+AuthRuntimeComposition ComposeAuthRuntime(std::string_view roblosecurity);
 
-// Retains HTTP transport for native sign-in and validates persisted credentials.
-AuthRuntimeComposition ComposeAuthRuntime(
-    const Environment& environment, const RuntimePaths& paths,
-    services::AuthService& auth_service,
-    std::shared_ptr<services::HttpClient> live_auth_http_client);
-
-// Persists a raw or prefixed Roblox credential to the given cookie file atomically.
-bool PersistRobloxCookie(const std::filesystem::path& path,
-                         std::string_view cookie_value);
-
-}  // namespace runtime
-}  // namespace mocktail
+}  // namespace mocktail::runtime
 
 #endif  // MOCKTAIL_RUNTIME_AUTH_RUNTIME_COMPOSITION_H_

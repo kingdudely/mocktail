@@ -1,6 +1,5 @@
 #include "runtime/roblox_web_view_bridge.h"
 
-#include <curl/curl.h>
 
 #include <charconv>
 #include <cstdio>
@@ -134,31 +133,28 @@ bool HasControlBytes(const std::string& value) {
   return false;
 }
 
-Status EscapeCaptchaQueryValue(const std::string& value, std::string* escaped) {
+Status EscapeCaptchaQueryValue(const std::string& value,
+                                   std::string* escaped) {
   if (escaped == nullptr) {
     return Invalid("captcha query output is null");
   }
-  static std::once_flag curl_initialization;
-  static CURLcode curl_initialization_status = CURLE_FAILED_INIT;
-  std::call_once(curl_initialization, [] {
-    curl_initialization_status = curl_global_init(CURL_GLOBAL_DEFAULT);
-  });
-  if (curl_initialization_status != CURLE_OK) {
-    return Unavailable("could not initialize captcha URL encoder");
+  static constexpr char kHex[] = "0123456789ABCDEF";
+  escaped->clear();
+  escaped->reserve(value.size() * 3);
+  for (unsigned char byte : value) {
+    const bool unreserved =
+        (byte >= 'a' && byte <= 'z') ||
+        (byte >= 'A' && byte <= 'Z') ||
+        (byte >= '0' && byte <= '9') ||
+        byte == '-' || byte == '.' || byte == '_' || byte == '~';
+    if (unreserved) {
+      escaped->push_back(static_cast<char>(byte));
+      continue;
+    }
+    escaped->push_back('%');
+    escaped->push_back(kHex[(byte >> 4) & 0x0f]);
+    escaped->push_back(kHex[byte & 0x0f]);
   }
-  CURL* curl = curl_easy_init();
-  if (curl == nullptr) {
-    return Unavailable("could not initialize captcha URL encoder");
-  }
-  char* encoded =
-      curl_easy_escape(curl, value.data(), static_cast<int>(value.size()));
-  if (encoded == nullptr) {
-    curl_easy_cleanup(curl);
-    return Unavailable("could not encode captcha credential value");
-  }
-  escaped->assign(encoded);
-  curl_free(encoded);
-  curl_easy_cleanup(curl);
   return Status::Ok();
 }
 

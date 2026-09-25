@@ -1,6 +1,5 @@
 #include "runtime/webview_helper_launcher.h"
 
-#include <curl/curl.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
@@ -108,31 +107,6 @@ public:
 
 private:
   int descriptor_ = -1;
-};
-
-class ScopedCurlUrl final {
-public:
-  ScopedCurlUrl() : handle_(curl_url()) {}
-  ~ScopedCurlUrl() {
-    if (handle_ != nullptr) {
-      curl_url_cleanup(handle_);
-    }
-  }
-
-  CURLU *get() const { return handle_; }
-
-private:
-  CURLU *handle_ = nullptr;
-};
-
-class ScopedCurlString final {
-public:
-  ~ScopedCurlString() { curl_free(value_); }
-  char **output() { return &value_; }
-  const char *get() const { return value_; }
-
-private:
-  char *value_ = nullptr;
 };
 
 bool IsRobloxHost(std::string_view host) {
@@ -342,58 +316,75 @@ void TerminateAndReapChild(pid_t child) {
 
 } // namespace
 
-bool ValidateWebViewUrl(std::string_view url, std::string *error) {
-  const auto fail = [error](const char *message) {
+bool ValidateWebViewUrl(std::string_view url, std::string* error) {
+  const auto fail = [error](const char* message) {
     if (error != nullptr) {
       *error = message;
     }
     return false;
   };
+
   if (url.empty() || url.size() > kMaximumWebViewUrlBytes ||
       ContainsControlBytes(url)) {
     return fail("webview URL is empty, oversized, or contains control bytes");
   }
 
-  const ScopedCurlUrl parsed;
-  if (parsed.get() == nullptr ||
-      curl_url_set(parsed.get(), CURLUPART_URL, std::string(url).c_str(),
-                   CURLU_NON_SUPPORT_SCHEME | CURLU_PATH_AS_IS) != CURLUE_OK) {
-    return fail("webview URL is malformed");
+  const std::size_t scheme_end = url.find("://");
+  if (scheme_end == std::string_view::npos ||
+      url.substr(0, scheme_end) != "https") {
+    return fail("webview URL must use HTTPS");
   }
-  ScopedCurlString scheme;
-  ScopedCurlString host;
-  ScopedCurlString user;
-  ScopedCurlString password;
-  ScopedCurlString port;
-  ScopedCurlString path;
-  if (curl_url_get(parsed.get(), CURLUPART_SCHEME, scheme.output(), 0) !=
-          CURLUE_OK ||
-      curl_url_get(parsed.get(), CURLUPART_HOST, host.output(), 0) !=
-          CURLUE_OK ||
-      scheme.get() == nullptr || std::string_view(scheme.get()) != "https" ||
-      host.get() == nullptr || !IsRobloxHost(host.get())) {
-    return fail("webview URL must use HTTPS on roblox.com");
+
+  const std::size_t authority_begin = scheme_end + 3;
+  if (authority_begin >= url.size()) {
+    return fail("webview URL has no host");
   }
-  if (curl_url_get(parsed.get(), CURLUPART_USER, user.output(), 0) ==
-          CURLUE_OK ||
-      curl_url_get(parsed.get(), CURLUPART_PASSWORD, password.output(), 0) ==
-          CURLUE_OK) {
-    return fail("webview URL must not contain user information");
+
+  std::size_t authority_end = url.find_first_of("/?#", authority_begin);
+  if (authority_end == std::string_view::npos) {
+    authority_end = url.size();
   }
-  const CURLUcode port_status =
-      curl_url_get(parsed.get(), CURLUPART_PORT, port.output(), 0);
-  if (port_status == CURLUE_OK &&
-      (port.get() == nullptr || std::string_view(port.get()) != "443")) {
-    return fail("webview URL must use the default HTTPS port");
+  const std::string_view authority =
+      url.substr(authority_begin, authority_end - authority_begin);
+  if (authority.empty() || authority.find('@') != std::string_view::npos) {
+    return fail("webview URL host information is invalid");
   }
-  if (port_status != CURLUE_OK && port_status != CURLUE_NO_PORT) {
-    return fail("webview URL contains an invalid port");
+
+  std::string_view host = authority;
+  std::string_view port;
+  const std::size_t colon = authority.rfind(':');
+  if (colon != std::string_view::npos) {
+    host = authority.substr(0, colon);
+    port = authority.substr(colon + 1);
+    if (host.empty() || port.empty() ||
+        !std::all_of(port.begin(), port.end(),
+                     [](unsigned char c) { return c >= '0' && c <= '9'; }) ||
+        port != "443") {
+      return fail("webview URL must use the default HTTPS port");
+    }
   }
-  if (curl_url_get(parsed.get(), CURLUPART_PATH, path.output(), 0) !=
-          CURLUE_OK ||
-      path.get() == nullptr || HasUnsafePath(path.get())) {
+
+  if (!IsRobloxHost(host)) {
+    return fail("webview URL host is not a Roblox domain");
+  }
+
+  const std::size_t path_begin = authority_end;
+  std::string_view path = "/";
+  if (path_begin < url.size() && url[path_begin] == '/') {
+    const std::size_t query = url.find_first_of("?#", path_begin);
+    path = url.substr(path_begin,
+                      query == std::string_view::npos
+                          ? url.size() - path_begin
+                          : query - path_begin);
+  } else if (path_begin < url.size() && url[path_begin] != '?' &&
+             url[path_begin] != '#') {
+    return fail("webview URL authority is malformed");
+  }
+
+  if (HasUnsafePath(path)) {
     return fail("webview URL contains an unsafe path");
   }
+
   return true;
 }
 

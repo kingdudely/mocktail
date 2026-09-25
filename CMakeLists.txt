@@ -49,10 +49,8 @@ set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/Vulkan-Headers EXCLUDE_FROM_ALL)
 
 find_package(OpenSSL REQUIRED)
-find_package(CURL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBYAML REQUIRED IMPORTED_TARGET yaml-0.1)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailPlatformGraphics.cmake)
@@ -98,18 +96,16 @@ target_include_directories(mocktail_runtime PRIVATE
   src third_party/jni/include)
 target_link_libraries(mocktail_runtime PUBLIC Threads::Threads)
 target_link_libraries(mocktail_runtime PRIVATE
-  OpenSSL::Crypto CURL::libcurl nlohmann_json::nlohmann_json
-  PkgConfig::GIO PkgConfig::LIBYAML ${CMAKE_DL_LIBS})
+  OpenSSL::Crypto nlohmann_json::nlohmann_json
+  PkgConfig::GIO ${CMAKE_DL_LIBS})
 mocktail_apply_compile_options(mocktail_runtime)
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
 
 add_library(mocktail_services STATIC
-  src/services/http_client.cc
-  src/services/auth_service.cc
   src/services/client_settings_service.cc)
 target_include_directories(mocktail_services PUBLIC include)
 target_link_libraries(mocktail_services PUBLIC
-  Mocktail::Runtime CURL::libcurl nlohmann_json::nlohmann_json)
+  Mocktail::Runtime nlohmann_json::nlohmann_json)
 mocktail_apply_compile_options(mocktail_services)
 add_library(Mocktail::Services ALIAS mocktail_services)
 
@@ -117,7 +113,7 @@ add_library(mocktail_auth_runtime_composition STATIC
   src/runtime/auth_runtime_composition.cc)
 target_include_directories(mocktail_auth_runtime_composition PUBLIC include)
 target_link_libraries(mocktail_auth_runtime_composition PUBLIC
-  Mocktail::LegacyJni Mocktail::Runtime Mocktail::Services)
+  Mocktail::LegacyJni Mocktail::Runtime)
 mocktail_apply_compile_options(mocktail_auth_runtime_composition)
 add_library(Mocktail::AuthRuntimeComposition ALIAS
   mocktail_auth_runtime_composition)
@@ -126,7 +122,7 @@ add_library(mocktail_webview_launcher STATIC
   src/runtime/webview_helper_launcher.cc)
 target_include_directories(mocktail_webview_launcher PUBLIC include)
 target_link_libraries(mocktail_webview_launcher PUBLIC
-  Mocktail::Runtime CURL::libcurl)
+  Mocktail::Runtime)
 mocktail_apply_compile_options(mocktail_webview_launcher)
 add_library(Mocktail::WebViewLauncher ALIAS mocktail_webview_launcher)
 

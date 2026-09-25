@@ -8,18 +8,9 @@
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
-#include "runtime/environment.h"
-#include "runtime/runtime_paths.h"
-#include "services/auth_service.h"
-#include "services/http_client.h"
-#include "jnivm/jnivm.h"
 #include "window/window.h"
 
 namespace {
-
-bool SetEnv(const char* name, const std::string& value) {
-  return setenv(name, value.c_str(), 1) == 0;
-}
 
 mocktail::Status ShutdownAudio(jnivm::VM* vm) {
   if (vm == nullptr) {
@@ -47,46 +38,22 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  if (!SetEnv("ROBLOX_LIB_PATH", command_line.options.roblox_library_path) ||
-      !SetEnv("MOCKTAIL_ASSET_PATH", command_line.options.asset_path) ||
-      !SetEnv("MOCKTAIL_ASSET_ROOT", command_line.options.asset_path)) {
+  if (setenv("ROBLOX_LIB_PATH",
+             command_line.options.roblox_library_path.c_str(), 1) != 0 ||
+      setenv("MOCKTAIL_ASSET_PATH",
+             command_line.options.asset_path.c_str(), 1) != 0 ||
+      setenv("MOCKTAIL_ASSET_ROOT",
+             command_line.options.asset_path.c_str(), 1) != 0) {
     std::cerr << "could not set Roblox payload environment\n";
     return EXIT_FAILURE;
   }
 
-  if (command_line.options.roblosecurity.empty()) {
-    if (!SetEnv("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "1")) {
-      std::cerr << "could not configure guest startup\n";
-      return EXIT_FAILURE;
-    }
-  } else {
-    std::string cookie = command_line.options.roblosecurity;
-    if (cookie.rfind(".ROBLOSECURITY=", 0) != 0) {
-      cookie.insert(0, ".ROBLOSECURITY=");
-    }
-    if (!SetEnv("MOCKTAIL_ROBLOX_COOKIES", cookie) ||
-        !SetEnv("MOCKTAIL_ALLOW_NO_COOKIE_LUA_APP", "0")) {
-      std::cerr << "could not configure Roblox authentication\n";
-      return EXIT_FAILURE;
-    }
-  }
-
-  const mocktail::runtime::ProcessEnvironment environment;
-  const mocktail::runtime::RuntimePaths paths =
-      mocktail::runtime::RuntimePaths::FromEnvironment(environment);
-  auto http_client =
-      std::make_shared<mocktail::services::CurlHttpClient>();
-  mocktail::services::AuthService auth_service(*http_client);
   mocktail::runtime::AuthRuntimeComposition composition =
       mocktail::runtime::ComposeAuthRuntime(
-          environment, paths, auth_service, http_client);
+          command_line.options.roblosecurity);
 
   if (!composition) {
-    std::cerr << "[auth] " << composition.error;
-    if (composition.http_status != 0) {
-      std::cerr << " (HTTP " << composition.http_status << ')';
-    }
-    std::cerr << '\n';
+    std::cerr << "[auth] could not create the Roblox pseudo-JVM\n";
     return EXIT_FAILURE;
   }
 
