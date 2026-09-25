@@ -15,9 +15,6 @@
 #include <utility>
 #include <vector>
 
-#if !SDL_VERSION_ATLEAST(3, 4, 0)
-#error "Mocktail borrowed audio buffers require SDL 3.4 or newer"
-#endif
 
 namespace mocktail::audio {
 namespace {
@@ -113,23 +110,6 @@ SDL_AudioFormat ToSdlFormat(PcmSampleFormat format) {
   return SDL_AUDIO_UNKNOWN;
 }
 
-struct SdlReleaseContext {
-  AudioBufferReleaseCallback callback = nullptr;
-  void* callback_context = nullptr;
-};
-
-void SDLCALL OnSdlBufferReleased(void* userdata, const void* data, int size) {
-  auto* release = static_cast<SdlReleaseContext*>(userdata);
-  if (release == nullptr) {
-    return;
-  }
-  if (release->callback != nullptr) {
-    release->callback(release->callback_context, data,
-                      size > 0 ? static_cast<std::size_t>(size) : 0);
-  }
-  delete release;
-}
-
 class SdlAudioSink final : public AudioSink {
  public:
   SdlAudioSink(PcmSpec spec, SDL_AudioStream* stream,
@@ -172,29 +152,14 @@ class SdlAudioSink final : public AudioSink {
     }
 
     bool queued = false;
-    if (buffer.release_callback == nullptr) {
-      queued = SDL_PutAudioStreamData(stream, buffer.data,
-                                      static_cast<int>(buffer.size_bytes));
-    } else {
-      auto* release = new (std::nothrow)
-          SdlReleaseContext{buffer.release_callback, buffer.release_context};
-      if (release == nullptr) {
-        EndCall();
-        return Status::Error(StatusCode::kUnavailable,
-                             "unable to allocate SDL buffer release context");
-      }
-      queued = SDL_PutAudioStreamDataNoCopy(stream, buffer.data,
-                                            static_cast<int>(buffer.size_bytes),
-                                            OnSdlBufferReleased, release);
-      if (!queued) {
-        delete release;
-      }
+    queued = SDL_PutAudioStreamData(
+        stream, buffer.data, static_cast<int>(buffer.size_bytes));
+    const Status status =
+        queued ? Status::Ok() : SdlError("SDL_PutAudioStreamData");
+    if (queued && buffer.release_callback != nullptr) {
+      buffer.release_callback(buffer.release_context, buffer.data,
+                              buffer.size_bytes);
     }
-    const Status status = queued
-                              ? Status::Ok()
-                              : SdlError(buffer.release_callback == nullptr
-                                             ? "SDL_PutAudioStreamData"
-                                             : "SDL_PutAudioStreamDataNoCopy");
     EndCall();
     return status;
   }
