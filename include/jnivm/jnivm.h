@@ -263,9 +263,6 @@ public:
   VM(const VM &) = delete;
   VM &operator=(const VM &) = delete;
 
-  // Returns nullptr if the class has not been registered.
-  std::shared_ptr<Class> FindClass(const std::string &class_name) const;
-
   JavaVM *GetJavaVM() { return java_vm_; }
 
   // Resolves the live pseudo-VM that owns an exact JavaVM pointer. Returns
@@ -462,8 +459,6 @@ private:
   JNINativeInterface_ native_interface_ = {};
   JNIEnv jni_env_storage_ = {};
   JNIEnv *jni_env_ = nullptr;
-
-  std::unordered_map<std::string, std::shared_ptr<Class>> class_registry_;
 
   mutable std::mutex roblox_auth_identity_mutex_;
   RobloxAuthIdentity roblox_auth_identity_;
