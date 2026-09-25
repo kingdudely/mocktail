@@ -20,18 +20,6 @@ bool IsRobloxScheme(const std::string& value) {
   return scheme == "roblox" || scheme == "roblox-player";
 }
 
-bool ReadValue(int argc, const char* const argv[], int* index,
-               const char* option, std::string* value, std::string* error) {
-  if (index == nullptr || value == nullptr || error == nullptr ||
-      *index + 1 >= argc || argv[*index + 1] == nullptr ||
-      argv[*index + 1][0] == '\0') {
-    if (error != nullptr) *error = std::string("missing value for ") + option;
-    return false;
-  }
-  *value = argv[++(*index)];
-  return true;
-}
-
 }  // namespace
 
 CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
