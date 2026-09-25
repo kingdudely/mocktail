@@ -35,7 +35,8 @@ class AndroidPackageManager final : public NativeObject {
 public:
   explicit AndroidPackageManager(std::shared_ptr<Class> klass);
 
-  bool HasSystemFeature(std::string_view name) const noexcept;
+  bool HasSystemFeature(std::string_view name, bool pc_hardware,
+                        bool touch_enabled) const noexcept;
 };
 
 // Returns a typed native C++ object for framework classes that have already
