@@ -2419,7 +2419,6 @@ jobject SystemServiceObject(const std::string& service_name) {
 }
 
 jobject AndroidObjectForMethod(const char* name) {
-  EnsureAndroidObjectGraph();
   if (!name) {
     return nullptr;
   }
