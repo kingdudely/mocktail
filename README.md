@@ -65,7 +65,7 @@ cmake --build build -j"$(nproc)"
 The resulting executable is:
 
 ```text
-build/roblox
+./roblox
 ```
 
 The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, libcurl,
