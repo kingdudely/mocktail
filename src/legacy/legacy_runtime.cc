@@ -268,8 +268,8 @@ void* RunJniOnLoadWorker(void* arg) {
       "com/roblox/universalapp/activitylifecyclecallbacks/"
       "JNIActivityLifecycleCallbacks");
   auto settings_class = context->vm->RegisterClass("rbx/JNIRobloxSettings");
-  settings_class->RegisterMethod(
-      "nativeInitClientSettings", "()V",
+  jni_vm->RegisterMethod(
+      settings_class, "nativeInitClientSettings", "()V",
       [](JNIEnv* /*env*/, jobject /*obj*/) {
         std::cout << "  [JNI callback] nativeInitClientSettings invoked\n";
       });
@@ -4401,8 +4401,8 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       jni_vm->RegisterClass("com/roblox/client/RobloxActivity");
   auto settings_class = jni_vm->RegisterClass("rbx/JNIRobloxSettings");
 
-  settings_class->RegisterMethod(
-      "nativeInitClientSettings", "()V",
+  context->vm->RegisterMethod(
+      settings_class, "nativeInitClientSettings", "()V",
       [](JNIEnv* /*env*/, jobject /*obj*/) {
         std::cout << "  [JNI callback] nativeInitClientSettings invoked\n";
       });
