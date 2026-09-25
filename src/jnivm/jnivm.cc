@@ -1,4 +1,5 @@
 #include "jnivm/jnivm.h"
+#include "jnivm/native_android_objects.h"
 
 #include "mocktail/audio/fmod_thread_floating_point.h"
 
@@ -108,16 +109,6 @@ struct PseudoArray {
 };
 
 constexpr jchar kEmptyUtf16[] = {0};
-
-struct PseudoJavaObject : Object {
-  explicit PseudoJavaObject(std::shared_ptr<Class> cls) : Object(std::move(cls)) {}
-
-  std::unordered_map<std::string, jobject> object_fields;
-  std::unordered_map<std::string, jint> int_fields;
-  std::unordered_map<std::string, jlong> long_fields;
-  std::unordered_map<std::string, jfloat> float_fields;
-  std::unordered_map<std::string, jboolean> boolean_fields;
-};
 
 void AppendUtf8CodePoint(std::uint32_t code_point, std::string* output) {
   if (code_point <= 0x7f) {
@@ -250,16 +241,16 @@ static std::vector<jchar> MakeUtf16Vector(const jchar* utf16, jsize length) {
   return {};
 }
 
-struct PseudoStringObject : PseudoJavaObject {
+struct PseudoStringObject : NativeObject {
   PseudoStringObject(std::shared_ptr<Class> cls, const char* utf)
-      : PseudoJavaObject(std::move(cls)),
+      : NativeObject(std::move(cls)),
         chars(ModifiedUtf8ToUtf16(utf)),
         value(Utf16ToUtf8(chars)),
         modified_utf8(Utf16ToModifiedUtf8(chars)) {}
 
   PseudoStringObject(std::shared_ptr<Class> cls, const jchar* utf16,
                      jsize length)
-      : PseudoJavaObject(std::move(cls)),
+      : NativeObject(std::move(cls)),
         chars(MakeUtf16Vector(utf16, length)),
         value(Utf16ToUtf8(chars)),
         modified_utf8(Utf16ToModifiedUtf8(chars)) {}
@@ -811,7 +802,18 @@ void ReleaseJniReference(jobject obj) {
   }
 }
 
-PseudoJavaObject* PseudoObjectFromRef(jobject obj) {
+
+AndroidContext* AndroidContextFromRef(jobject obj) {
+  NativeObject* object = NativeObjectFromRef(obj);
+  return dynamic_cast<AndroidContext*>(object);
+}
+
+AndroidPackageManager* AndroidPackageManagerFromRef(jobject obj) {
+  NativeObject* object = NativeObjectFromRef(obj);
+  return dynamic_cast<AndroidPackageManager*>(object);
+}
+
+NativeObject* NativeObjectFromRef(jobject obj) {
   if (__builtin_expect(obj == nullptr, 0)) {
     return nullptr;
   }
@@ -821,7 +823,7 @@ PseudoJavaObject* PseudoObjectFromRef(jobject obj) {
     if (__builtin_expect(type == static_cast<uint8_t>(SegmentType::kObject), 1)) {
       void* raw_ptr = my_segment[index];
       if (__builtin_expect(raw_ptr != nullptr, 1)) {
-        return static_cast<PseudoJavaObject*>(reinterpret_cast<Object*>(raw_ptr));
+        return static_cast<NativeObject*>(reinterpret_cast<Object*>(raw_ptr));
       }
     }
   }
@@ -830,7 +832,10 @@ PseudoJavaObject* PseudoObjectFromRef(jobject obj) {
 
 jobject MakeObjectForClass(const std::string& class_name) {
   auto cls = FallbackClassForName(class_name);
-  return StoreObject(std::make_unique<PseudoJavaObject>(std::move(cls)));
+  if (auto native = CreateNativeAndroidObject(cls)) {
+    return StoreObject(std::move(native));
+  }
+  return StoreObject(std::make_unique<NativeObject>(std::move(cls)));
 }
 
 jobject MakeObject(jclass clazz) {
@@ -838,7 +843,10 @@ jobject MakeObject(jclass clazz) {
   if (!cls) {
     cls = FallbackClassForName("java/lang/Object");
   }
-  return StoreObject(std::make_unique<PseudoJavaObject>(std::move(cls)));
+  if (auto native = CreateNativeAndroidObject(cls)) {
+    return StoreObject(std::move(native));
+  }
+  return StoreObject(std::make_unique<NativeObject>(std::move(cls)));
 }
 
 jobject SingletonObject(const std::string& class_name) {
@@ -853,7 +861,7 @@ jobject SingletonObject(const std::string& class_name) {
 }
 
 std::string_view ObjectClassName(jobject obj) {
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !pseudo_object->GetClass()) {
     return {};
   }
@@ -886,7 +894,7 @@ jobject EngineJavaCallbackObject() {
 
 void SetObjectFieldRaw(jobject obj, const char* field_name, jobject value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (pseudo_object && field_name) {
     if (value != nullptr) {
       auto it = g_jni_ref_counts.find(value);
@@ -909,7 +917,7 @@ void SetStringFieldRaw(jobject obj, const char* field_name, const char* value);
 
 void SetIntFieldRaw(jobject obj, const char* field_name, jint value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (pseudo_object && field_name) {
     pseudo_object->int_fields[field_name] = value;
   }
@@ -917,7 +925,7 @@ void SetIntFieldRaw(jobject obj, const char* field_name, jint value) {
 
 void SetLongFieldRaw(jobject obj, const char* field_name, jlong value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (pseudo_object && field_name) {
     pseudo_object->long_fields[field_name] = value;
   }
@@ -925,7 +933,7 @@ void SetLongFieldRaw(jobject obj, const char* field_name, jlong value) {
 
 void SetFloatFieldRaw(jobject obj, const char* field_name, jfloat value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (pseudo_object && field_name) {
     pseudo_object->float_fields[field_name] = value;
   }
@@ -933,7 +941,7 @@ void SetFloatFieldRaw(jobject obj, const char* field_name, jfloat value) {
 
 void SetBooleanFieldRaw(jobject obj, const char* field_name, jboolean value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  PseudoJavaObject* pseudo_object = PseudoObjectFromRef(obj);
+  NativeObject* pseudo_object = NativeObjectFromRef(obj);
   if (pseudo_object && field_name) {
     pseudo_object->boolean_fields[field_name] = value;
   }
@@ -1050,7 +1058,7 @@ std::string_view StringViewFromJString(jstring str) {
     return {};
   }
   auto* string_object = static_cast<PseudoStringObject*>(
-      PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+      NativeObjectFromRef(reinterpret_cast<jobject>(str)));
   if (string_object) {
     return string_object->value;
   }
@@ -1120,7 +1128,7 @@ jbyteArray JavaStringGetUtf8Bytes(jobject obj, jstring charset_name) {
   {
     std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
     auto* string_object = dynamic_cast<PseudoStringObject*>(
-        PseudoObjectFromRef(obj));
+        NativeObjectFromRef(obj));
     if (string_object == nullptr) {
       return nullptr;
     }
@@ -1161,7 +1169,7 @@ const char* StringChars(jstring str) {
   }
   if (g_known_strings.find(str) != g_known_strings.end()) {
     auto* string_object = static_cast<PseudoStringObject*>(
-        PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+        NativeObjectFromRef(reinterpret_cast<jobject>(str)));
     return string_object != nullptr ? string_object->modified_utf8.c_str()
                                     : "";
   }
@@ -1178,7 +1186,7 @@ const jchar* StringUtf16Chars(jstring str) {
   }
   if (g_known_strings.find(str) != g_known_strings.end()) {
     auto* string_object = static_cast<PseudoStringObject*>(
-        PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+        NativeObjectFromRef(reinterpret_cast<jobject>(str)));
     return string_object && !string_object->chars.empty()
                ? string_object->chars.data()
                : kEmptyUtf16;
@@ -1193,7 +1201,7 @@ jsize StringUtf16Length(jstring str) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   if (g_known_strings.find(str) != g_known_strings.end()) {
     auto* string_object = static_cast<PseudoStringObject*>(
-        PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+        NativeObjectFromRef(reinterpret_cast<jobject>(str)));
     return string_object != nullptr
                ? static_cast<jsize>(string_object->chars.size())
                : 0;
@@ -1209,7 +1217,7 @@ jsize StringModifiedUtf8Length(jstring str) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   if (g_known_strings.find(str) != g_known_strings.end()) {
     auto* string_object = static_cast<PseudoStringObject*>(
-        PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+        NativeObjectFromRef(reinterpret_cast<jobject>(str)));
     return string_object != nullptr
                ? static_cast<jsize>(string_object->modified_utf8.size())
                : 0;
@@ -1227,7 +1235,7 @@ void CopyStringRegion(jstring str, jsize start, jsize length, jchar* output) {
   }
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   auto* string_object = static_cast<PseudoStringObject*>(
-      PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+      NativeObjectFromRef(reinterpret_cast<jobject>(str)));
   if (string_object == nullptr ||
       static_cast<std::size_t>(start) >= string_object->chars.size()) {
     return;
@@ -1245,7 +1253,7 @@ void CopyStringModifiedUtf8Region(jstring str, jsize start, jsize length,
   }
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   auto* string_object = static_cast<PseudoStringObject*>(
-      PseudoObjectFromRef(reinterpret_cast<jobject>(str)));
+      NativeObjectFromRef(reinterpret_cast<jobject>(str)));
   if (string_object == nullptr ||
       static_cast<std::size_t>(start) >= string_object->chars.size()) {
     return;
@@ -2229,7 +2237,7 @@ bool HandleRobloxCookieSetVoidMethodA(jobject obj, jmethodID method_id,
 
 jobject MakeFileObject(const char* path) {
   jobject file = MakeObjectForClass("java/io/File");
-  auto* pseudo_object = PseudoObjectFromRef(file);
+  auto* pseudo_object = NativeObjectFromRef(file);
   if (pseudo_object) {
     pseudo_object->object_fields["path"] = MakeString(path);
   }
@@ -2283,7 +2291,7 @@ jobject MakePackageInfoObject() {
 jobject MakeDeviceStaticParamsObject() {
   jobject object =
       SingletonObject("com/roblox/engine/jni/model/DeviceStaticParams");
-  auto* pseudo_object = PseudoObjectFromRef(object);
+  auto* pseudo_object = NativeObjectFromRef(object);
   if (pseudo_object) {
     const PlatformIdentity identity = CurrentPlatformIdentity();
     pseudo_object->object_fields["osVersion"] = MakeString("Android 13");
@@ -2787,6 +2795,48 @@ jobject ClassObjectForName(const std::string& requested_name) {
 
 jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
   const char* name = MethodName(method_id);
+
+  // Typed Android objects call native C++ methods directly. The generic
+  // compatibility dispatch below remains as a fallback while classes are
+  // migrated one at a time.
+  if (AndroidContext* context = AndroidContextFromRef(obj)) {
+    if (std::strcmp(name, "getPackageName") == 0) {
+      return MakeString(context->PackageName());
+    }
+    if (std::strcmp(name, "getFilesDir") == 0) {
+      return MakeFileObject(context->FilesDirectory());
+    }
+    if (std::strcmp(name, "getCacheDir") == 0) {
+      return MakeFileObject(context->CacheDirectory());
+    }
+    if (std::strcmp(name, "getExternalFilesDir") == 0) {
+      (void)va_arg(args, jobject);
+      return MakeFileObject(context->ExternalFilesDirectory());
+    }
+    if (std::strcmp(name, "getSystemService") == 0) {
+      jstring service = va_arg(args, jstring);
+      switch (context->SystemService(StringFromJString(service))) {
+        case AndroidSystemService::kWindow:
+          return SingletonObject("android/view/WindowManager");
+        case AndroidSystemService::kDisplay:
+          return SingletonObject("android/hardware/display/DisplayManager");
+        case AndroidSystemService::kAudio:
+          return SingletonObject("android/media/AudioManager");
+        case AndroidSystemService::kInputMethod:
+          return SingletonObject(
+              "android/view/inputmethod/InputMethodManager");
+        case AndroidSystemService::kSensor:
+          return SingletonObject("android/hardware/SensorManager");
+        case AndroidSystemService::kConnectivity:
+          return SingletonObject("android/net/ConnectivityManager");
+        case AndroidSystemService::kPower:
+          return SingletonObject("android/os/PowerManager");
+        case AndroidSystemService::kUnknown:
+          break;
+      }
+      return SingletonObject("java/lang/Object");
+    }
+  }
   if (IsJavaStringGetBytesMethod(obj, method_id)) {
     return JavaStringGetUtf8Bytes(obj, va_arg(args, jstring));
   }
@@ -2845,7 +2895,7 @@ jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
 
 jobject ObjectFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = PseudoObjectFromRef(obj);
+  auto* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !field_name) {
     return nullptr;
   }
@@ -2855,7 +2905,7 @@ jobject ObjectFieldValue(jobject obj, const char* field_name) {
 
 jint IntFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = PseudoObjectFromRef(obj);
+  auto* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !field_name) {
     return 0;
   }
@@ -2865,7 +2915,7 @@ jint IntFieldValue(jobject obj, const char* field_name) {
 
 jboolean BooleanFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = PseudoObjectFromRef(obj);
+  auto* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !field_name) {
     return JNI_FALSE;
   }
@@ -2875,7 +2925,7 @@ jboolean BooleanFieldValue(jobject obj, const char* field_name) {
 
 jlong LongFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = PseudoObjectFromRef(obj);
+  auto* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !field_name) {
     return 0;
   }
@@ -2885,7 +2935,7 @@ jlong LongFieldValue(jobject obj, const char* field_name) {
 
 jfloat FloatFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = PseudoObjectFromRef(obj);
+  auto* pseudo_object = NativeObjectFromRef(obj);
   if (!pseudo_object || !field_name) {
     return 0.0f;
   }
@@ -2939,6 +2989,13 @@ bool PackageManagerBooleanResultForMethodV(jobject obj, jmethodID method_id,
   const PlatformIdentity identity =
       CurrentVM() != nullptr ? CurrentVM()->GetPlatformIdentitySnapshot()
                              : PlatformIdentity{};
+  if (auto* package_manager = AndroidPackageManagerFromRef(obj)) {
+    *result = package_manager->HasSystemFeature(
+                  feature_name, identity.pc_hardware, identity.touch_enabled)
+                  ? JNI_TRUE
+                  : JNI_FALSE;
+    return true;
+  }
   if (feature_name == "android.hardware.type.pc") {
     *result = identity.pc_hardware ? JNI_TRUE : JNI_FALSE;
   } else if (feature_name == "android.hardware.touchscreen" ||
@@ -2968,6 +3025,13 @@ bool PackageManagerBooleanResultForMethodA(jobject obj, jmethodID method_id,
   const PlatformIdentity identity =
       CurrentVM() != nullptr ? CurrentVM()->GetPlatformIdentitySnapshot()
                              : PlatformIdentity{};
+  if (auto* package_manager = AndroidPackageManagerFromRef(obj)) {
+    *result = package_manager->HasSystemFeature(
+                  feature_name, identity.pc_hardware, identity.touch_enabled)
+                  ? JNI_TRUE
+                  : JNI_FALSE;
+    return true;
+  }
   if (feature_name == "android.hardware.type.pc") {
     *result = identity.pc_hardware ? JNI_TRUE : JNI_FALSE;
   } else if (feature_name.rfind("android.hardware.touchscreen", 0) == 0) {
@@ -3193,7 +3257,7 @@ bool SnapshotRobloxTextInputShow(jlong text_box, jboolean show_native_input,
   }
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   PseudoArray* array = ArrayFromRef(text_array);
-  auto* info = PseudoObjectFromRef(info_object);
+  auto* info = NativeObjectFromRef(info_object);
   if (array == nullptr || info == nullptr ||
       ObjectClassName(info_object) !=
           "com/roblox/engine/jni/model/NativeTextBoxInfo" ||
@@ -6776,7 +6840,7 @@ void VM::InitJNIFunctionTables() {
   native_interface_.GetObjectClass =
       [](JNIEnv* /*env*/, jobject obj) -> jclass {
     Trace("GetObjectClass");
-    auto* pseudo_object = PseudoObjectFromRef(obj);
+    auto* pseudo_object = NativeObjectFromRef(obj);
     if (pseudo_object) {
       return StoreClass(pseudo_object->GetClass());
     }
@@ -7418,7 +7482,7 @@ void VM::InitJNIFunctionTables() {
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID,
          jboolean val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = PseudoObjectFromRef(obj);
+    auto* pseudo_object = NativeObjectFromRef(obj);
     if (pseudo_object && name) {
       pseudo_object->boolean_fields[name] = val;
     }
@@ -7432,7 +7496,7 @@ void VM::InitJNIFunctionTables() {
   native_interface_.SetIntField =
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jint val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = PseudoObjectFromRef(obj);
+    auto* pseudo_object = NativeObjectFromRef(obj);
     if (pseudo_object && name) {
       pseudo_object->int_fields[name] = val;
     }
@@ -7444,7 +7508,7 @@ void VM::InitJNIFunctionTables() {
   native_interface_.SetFloatField =
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jfloat val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = PseudoObjectFromRef(obj);
+    auto* pseudo_object = NativeObjectFromRef(obj);
     if (pseudo_object && name) {
       pseudo_object->float_fields[name] = val;
     }
