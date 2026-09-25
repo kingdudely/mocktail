@@ -72,7 +72,9 @@ target_include_directories(mocktail_bionic_stdio_runtime PUBLIC include)
 mocktail_apply_compile_options(mocktail_bionic_stdio_runtime)
 add_library(Mocktail::BionicStdio ALIAS mocktail_bionic_stdio_runtime)
 
-add_library(mocktail_legacy_jnivm STATIC src/jnivm/jnivm.cc)
+add_library(mocktail_legacy_jnivm STATIC
+  src/jnivm/jnivm.cc
+  src/jnivm/native_android_objects.cc)
 target_include_directories(mocktail_legacy_jnivm PUBLIC
   include ${MOCKTAIL_JNI_INCLUDE_DIRS})
 target_link_libraries(mocktail_legacy_jnivm PUBLIC Threads::Threads)
