@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Mocktail
+Comment=Linux Roblox native runtime
+Exec=mocktail %u
+Terminal=false
+Type=Application
+Categories=Game;
+MimeType=x-scheme-handler/roblox;x-scheme-handler/roblox-player;
