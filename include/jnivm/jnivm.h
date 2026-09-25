@@ -28,6 +28,23 @@ private:
   std::shared_ptr<Class> klass_;
 };
 
+// JNI references point at native C++ objects. The JNI ABI stays opaque to the
+// guest, while the implementation underneath can use ordinary C++ classes.
+// These field maps are only a compatibility store for Java fields that have
+// not yet been migrated to typed native members.
+class NativeObject : public Object {
+public:
+  explicit NativeObject(std::shared_ptr<Class> klass)
+      : Object(std::move(klass)) {}
+  ~NativeObject() override = default;
+
+  std::unordered_map<std::string, jobject> object_fields;
+  std::unordered_map<std::string, jint> int_fields;
+  std::unordered_map<std::string, jlong> long_fields;
+  std::unordered_map<std::string, jfloat> float_fields;
+  std::unordered_map<std::string, jboolean> boolean_fields;
+};
+
 using MethodCallback = std::function<void(JNIEnv *, jobject)>;
 
 // Resolved Roblox account identity supplied by the host runtime. This
