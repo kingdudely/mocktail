@@ -28,9 +28,6 @@
 
 namespace jnivm {
 
-extern void* my_segment[100000];
-extern int g_jni_ref_index;
-
 extern "C" {
 void* mocktail_gameactivity_on_start_native = nullptr;
 void* mocktail_gameactivity_on_resume_native = nullptr;
