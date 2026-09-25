@@ -249,3 +249,6 @@ set_target_properties(mocktail PROPERTIES
 
 install(TARGETS mocktail
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+
+install(FILES "${CMAKE_SOURCE_DIR}/mocktail.desktop"
+  DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
