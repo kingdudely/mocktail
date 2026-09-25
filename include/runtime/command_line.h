@@ -8,8 +8,8 @@ namespace mocktail::runtime {
 struct CommandLineOptions {
   std::string program_name = "roblox";
   std::string launch_uri;
-  std::string roblox_library_path;
-  std::string asset_path;
+  std::string roblox_library_path = "./libroblox.so";
+  std::string asset_path = "./assets";
   bool headless = false;
 };
 
