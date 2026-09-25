@@ -454,7 +454,6 @@ RobloxLaunchRequest MakeRequest(const LaunchFields& fields) {
   request.join_attempt_id = fields.join_attempt_id;
   request.join_attempt_origin = fields.join_attempt_origin;
   request.iso_context = fields.iso_context;
-  request.authentication_ticket = fields.authentication_ticket;
   return request;
 }
 
