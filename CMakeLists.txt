@@ -128,7 +128,7 @@ target_include_directories(mocktail_auth_runtime_composition PUBLIC include)
 target_link_libraries(mocktail_auth_runtime_composition PUBLIC
   Mocktail::LegacyJni Mocktail::Runtime)
 target_link_libraries(mocktail_auth_runtime_composition PRIVATE
-  OpenSSL::Crypto)
+  Threads::Threads)
 mocktail_apply_compile_options(mocktail_auth_runtime_composition)
 add_library(Mocktail::AuthRuntimeComposition ALIAS
   mocktail_auth_runtime_composition)
