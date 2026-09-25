@@ -73,9 +73,6 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
     } else if (argument == "--libroblox_file") {
       if (!ReadValue(argc, argv, &index, "--libroblox_file",
                      &result.options.roblox_library_path, &result.error)) return result;
-    } else if (argument == "--launch-uri") {
-      if (!ReadValue(argc, argv, &index, "--launch-uri",
-                     &result.options.launch_uri, &result.error)) return result;
     } else if (argument == "--place-id") {
       std::string value;
       if (!ReadValue(argc, argv, &index, "--place-id", &value, &result.error)) return result;
@@ -114,15 +111,15 @@ CommandLineParseResult ParseCommandLine(int argc, const char* const argv[]) {
 std::string CommandLineUsage(const std::string& program_name) {
   std::ostringstream out;
   out << "Usage: " << (program_name.empty() ? "mocktail" : program_name)
-      << " [options] [roblox-player:...]\n\n"
+      << " [options] [roblox:...|roblox-player:...]\n\n"
       << "Options:\n"
-      << "  --launch-uri <uri>       Roblox launch URI (also accepted positionally)\n"
-      << "  --place-id <id>          Override the launch place id\n"
-      << "  --server-id <id>         Override the Roblox server/game id\n"
-      << "  --headless               Run without creating an SDL window\n"
-      << "  --ROBLOSECURITY <value>  Optional fallback Roblox session cookie\n"
       << "  --assets_dir <path>      Roblox assets directory (default: ./assets)\n"
-      << "  --libroblox_file <path>  libroblox.so path (default: ./libroblox.so)\n";
+      << "  --libroblox_file <path>  libroblox.so path (default: ./libroblox.so)\n"
+      << "  --ROBLOSECURITY <value>  Roblox session cookie\n"
+      << "  --place-id <id>          Place to launch\n"
+      << "  --server-id <id>         Roblox server/game id\n"
+      << "  --headless               Run without creating an SDL window\n"
+      << "\nA Roblox URL may be passed as the single positional argument.\n";
   return out.str();
 }
 
