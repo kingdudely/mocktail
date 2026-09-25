@@ -2,25 +2,21 @@
 
 Minimal Linux Roblox compatibility runtime with a browser-first launcher.
 
-The executable is named `roblox`. Mocktail does not download Roblox. By
-default it looks for the prepared Roblox native library and assets beside the
-executable:
-
-```text
-roblox
-libroblox.so
-assets/
-```
+The executable is named `roblox`. Mocktail does not download Roblox. By default it looks for the prepared Roblox native library at
+`~/libroblox.so` and assets at `~/assets`.
 
 ## JNI architecture
 
-Mocktail does not run a Java VM. The JNI ABI is implemented by native C++ objects,
-so a JNI object handle can resolve directly to a C++ class instance. The
-framework is being migrated class-by-class using Cordial's documented Roblox
-JNI surface; unconverted classes retain the generic compatibility fallback.
+Mocktail uses the upstream `libjnivm` project for the JNI ABI, references,
+strings, method IDs, native registration, and object lifetime. Mocktail only
+defines the native C++ Android/Roblox classes and host callbacks that Roblox
+actually reaches.
 
-The first typed framework objects are Context, Application, Activity,
-MainGameActivity, and PackageManager.
+This keeps the compatibility layer small and avoids maintaining a second
+pseudo-JVM. libjnivm also implements JNI's Modified UTF-8 rules, so Mocktail
+does not duplicate UTF-16 conversion code.
+
+The repository pins libjnivm as a git submodule under `third_party/libjnivm`.
 ## Launching from Roblox
 
 The normal path is simply pressing **Play** on roblox.com.
@@ -42,6 +38,7 @@ entry, so the browser can invoke `roblox %u` directly.
 From a checkout:
 
 ```sh
+git submodule update --init --recursive
 ./roblox
 ```
 
@@ -62,9 +59,10 @@ launcher. Browser launch data is the source of truth. A small shell script can
 construct a `roblox-player:` URI later when you need manual testing.
 
 The runtime uses `ROBLOX_LIB_PATH` and `MOCKTAIL_ASSET_PATH` internally. When
-those are not already set, they default to `./libroblox.so` and `./assets/` from the launch directory. Override the payload location with
-`--libroblox_so=<path>` and `--assets_dir=<path>`. A leading `~/` in these
-options is expanded to the user's home directory.
+those are not already set, they default to `~/libroblox.so` and `~/assets/`.
+Override the payload location with `--libroblox_so=<path>` and
+`--assets_dir=<path>`. A leading `~/` in these options is expanded to the
+user's home directory.
 
 ## Build
 
@@ -79,6 +77,6 @@ The resulting executable is:
 ./roblox
 ```
 
-The host needs a JDK development package for JNI headers, plus SDL3, SDL3_ttf,
-Vulkan/EGL/GLES headers, OpenSSL, libcurl, nlohmann-json, libelf, utf8proc,
-fontconfig, and a C++17 toolchain.
+The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, libcurl,
+nlohmann-json, libelf, utf8proc, fontconfig, and a C++17 toolchain. JNI headers
+come from the pinned libjnivm submodule; a host JVM is not used.
