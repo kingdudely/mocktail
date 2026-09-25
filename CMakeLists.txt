@@ -9,27 +9,20 @@ project(Mocktail
 include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
-# Mocktail implements its own pseudo-JVM. It needs only the JNI headers,
-# not libjvm, AWT, or a host Java runtime.
-set(_MOCKTAIL_JNI_HINTS
-  "$ENV{JAVA_HOME}/include"
-  "/usr/lib/jvm/default-java/include")
-file(GLOB _MOCKTAIL_JNI_GLOB "/usr/lib/jvm/*/include")
-list(APPEND _MOCKTAIL_JNI_HINTS ${_MOCKTAIL_JNI_GLOB})
+# Mocktail implements its own pseudo-JVM. JNI is an API header surface here;
+# it does not need a host libjvm or AWT. Keep the headers vendored so building
+# Mocktail does not require a JDK installation.
+set(MOCKTAIL_JNI_INCLUDE_DIR
+  ${CMAKE_SOURCE_DIR}/third_party/jni/include)
+set(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
+  ${CMAKE_SOURCE_DIR}/third_party/jni/include)
 
-find_path(MOCKTAIL_JNI_INCLUDE_DIR
-  NAMES jni.h
-  HINTS ${_MOCKTAIL_JNI_HINTS})
-find_path(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
-  NAMES jni_md.h
-  HINTS ${MOCKTAIL_JNI_INCLUDE_DIR}
-  PATH_SUFFIXES linux)
-if(NOT MOCKTAIL_JNI_INCLUDE_DIR OR NOT MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR)
+if(NOT EXISTS "${MOCKTAIL_JNI_INCLUDE_DIR}/jni.h" OR
+   NOT EXISTS "${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR}/jni_md.h")
   message(FATAL_ERROR
-    "JNI headers are required (jni.h and jni_md.h). "
-    "Install a JDK development package such as default-jdk-headless "
-    "or set JAVA_HOME.")
+    "Vendored JNI headers are missing under third_party/jni/include")
 endif()
+
 set(MOCKTAIL_JNI_INCLUDE_DIRS
   ${MOCKTAIL_JNI_INCLUDE_DIR}
   ${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR})
