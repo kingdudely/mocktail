@@ -6142,14 +6142,6 @@ void VM::RestoreFunctions() {
 }
 
 
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto it = g_fallback_classes.find(class_name);
-  if (it == g_fallback_classes.end()) {
-    return nullptr;
-  }
-  return it->second;
-}
-
 namespace {
 
 void JniCallStaticVoidV(JNIEnv*, jclass clazz, jmethodID methodID, va_list args) {
