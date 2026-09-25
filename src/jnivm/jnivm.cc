@@ -3073,7 +3073,7 @@ bool PackageManagerBooleanResultForMethodA(jobject obj, jmethodID method_id,
                                            jboolean* result) {
   if (result == nullptr ||
       ObjectClassName(obj) != "android/content/pm/PackageManager" ||
-      std::strcmp(MethodName(method_id), "hasSystemFeature") != 0) {
+      MethodTag(method_id) != JniMethodTag::kPackageManagerHasSystemFeature) {
     return false;
   }
   const std::string feature_name =
