@@ -6161,21 +6161,6 @@ void VM::RestoreFunctions() {
   }
 }
 
-std::shared_ptr<Class> VM::RegisterClass(const std::string& class_name) {
-  if (JniVmTraceEnabled()) {
-    fprintf(stderr, "  [JNI-VM] RegisterClass this=%p name_ref=%p name=\"%s\"\n",
-            static_cast<void*>(this), static_cast<const void*>(&class_name),
-            class_name.c_str());
-  }
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto it = class_registry_.find(class_name);
-  if (it != class_registry_.end()) {
-    return it->second;
-  }
-  auto cls = std::make_shared<Class>(class_name);
-  class_registry_[class_name] = cls;
-  return cls;
-}
 
 std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
