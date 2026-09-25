@@ -6541,6 +6541,174 @@ std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
   return it->second;
 }
 
+
+namespace {
+
+void JniCallStaticVoidV(JNIEnv*, jclass clazz, jmethodID methodID, va_list args) {
+  HandleStaticVoidMethodV(nullptr, clazz, methodID, args);
+}
+void JniCallStaticVoidA(JNIEnv*, jclass clazz, jmethodID methodID,
+                        const jvalue* args) {
+  HandleStaticVoidMethodA(nullptr, clazz, methodID, args);
+}
+jobject JniCallStaticObjectV(JNIEnv*, jclass clazz, jmethodID methodID,
+                             va_list args) {
+  jobject result = ObjectResultForMethodV(nullptr, methodID, args);
+  if (result != nullptr) return result;
+  result = ExactMessageBusStaticObject(clazz, methodID);
+  return result != nullptr ? result : StaticObjectResultForMethod(methodID);
+}
+jobject JniCallStaticObjectA(JNIEnv*, jclass clazz, jmethodID methodID,
+                             const jvalue* args) {
+  const char* name = MethodName(methodID);
+  if (args && std::strcmp(name, "forName") == 0) {
+    return ClassObjectForName(StringFromJString(
+        reinterpret_cast<jstring>(args[0].l)));
+  }
+  jobject result = nullptr;
+  if (CookieObjectResultForMethodA(name, args, &result)) return result;
+  result = ExactMessageBusStaticObject(clazz, methodID);
+  return result != nullptr ? result : StaticObjectResultForMethod(methodID);
+}
+jboolean JniStaticBooleanResult(const char* name) {
+  jboolean result = JNI_FALSE;
+  if (std::strcmp(name, "isSystemThemeAvailable") == 0) return JNI_TRUE;
+  if (FmodBooleanResultForMethod(name, &result)) return result;
+  return CookieBooleanResultForMethod(name, &result) ? result : JNI_FALSE;
+}
+jint JNICALL JniCallStaticIntV(JNIEnv*, jclass, jmethodID methodID, va_list args) {
+  return StaticIntResultForMethodV(methodID, args);
+}
+jint JNICALL JniCallStaticIntA(JNIEnv*, jclass, jmethodID methodID,
+                               const jvalue* args) {
+  return StaticIntResultForMethodA(methodID, args);
+}
+jlong JNICALL JniCallStaticLongV(JNIEnv*, jclass, jmethodID methodID, va_list) {
+  return StaticLongResultForMethod(methodID);
+}
+jlong JNICALL JniCallStaticLongA(JNIEnv*, jclass, jmethodID methodID,
+                                 const jvalue*) {
+  return StaticLongResultForMethod(methodID);
+}
+jboolean JNICALL JniCallStaticBooleanV(JNIEnv*, jclass, jmethodID methodID, va_list) {
+  return JniStaticBooleanResult(MethodName(methodID));
+}
+jboolean JNICALL JniCallStaticBooleanA(JNIEnv*, jclass, jmethodID methodID,
+                                       const jvalue*) {
+  return JniStaticBooleanResult(MethodName(methodID));
+}
+jfloat JNICALL JniCallStaticFloatV(JNIEnv*, jclass, jmethodID, va_list) { return 0.0f; }
+jfloat JNICALL JniCallStaticFloatA(JNIEnv*, jclass, jmethodID, const jvalue*) { return 0.0f; }
+jdouble JNICALL JniCallStaticDoubleV(JNIEnv*, jclass, jmethodID, va_list) { return 0.0; }
+jdouble JNICALL JniCallStaticDoubleA(JNIEnv*, jclass, jmethodID, const jvalue*) { return 0.0; }
+jbyte JNICALL JniZeroByteV(JNIEnv*, jobject, jmethodID, va_list) { return 0; }
+jbyte JNICALL JniZeroByteA(JNIEnv*, jobject, jmethodID, const jvalue*) { return 0; }
+jchar JNICALL JniZeroCharV(JNIEnv*, jobject, jmethodID, va_list) { return 0; }
+jchar JNICALL JniZeroCharA(JNIEnv*, jobject, jmethodID, const jvalue*) { return 0; }
+jshort JNICALL JniZeroShortV(JNIEnv*, jobject, jmethodID, va_list) { return 0; }
+jshort JNICALL JniZeroShortA(JNIEnv*, jobject, jmethodID, const jvalue*) { return 0; }
+jdouble JNICALL JniZeroDoubleV(JNIEnv*, jobject, jmethodID, va_list) { return 0.0; }
+jdouble JNICALL JniZeroDoubleA(JNIEnv*, jobject, jmethodID, const jvalue*) { return 0.0; }
+
+void JniCallVoidV(JNIEnv*, jobject obj, jmethodID methodID, va_list args) {
+  if (HandleRobloxExperienceLifecycleVoidMethod(obj, methodID)) return;
+  if (HandleWebRtcAudioManagerVoidMethodV(obj, methodID, args)) return;
+  if (HandleRobloxOpenWebActivityMethodV(obj, methodID, args)) return;
+  if (HandleRobloxTextInputInstanceVoidMethodV(obj, methodID, args)) return;
+  if (HandleFmodAudioDeviceVoidMethodV(obj, methodID, args)) return;
+  if (HandleRobloxCookieSetVoidMethodV(obj, methodID, args)) return;
+  if (HandleMemStorageCallbackVoidMethodV(obj, methodID, args)) return;
+  HandleVoidMethod(obj, methodID, args);
+}
+void JniCallVoidA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue* args) {
+  if (HandleRobloxTextInputInstanceVoidMethodA(obj, methodID, args)) return;
+  if (HandleFmodAudioDeviceVoidMethodA(obj, methodID, args)) return;
+  if (HandleRobloxOpenWebActivityMethodA(obj, methodID, args)) return;
+  if (HandleRobloxCookieSetVoidMethodA(obj, methodID, args)) return;
+  if (HandleMemStorageCallbackVoidMethodA(obj, methodID, args)) return;
+  HandleVoidMethodA(obj, methodID, args);
+}
+jobject JniCallObjectA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue* args) {
+  const char* name = MethodName(methodID);
+  if (IsJavaStringGetBytesMethod(obj, methodID)) {
+    return args ? JavaStringGetUtf8Bytes(obj, static_cast<jstring>(args[0].l)) : nullptr;
+  }
+  if (args && std::strcmp(name, "run") == 0 &&
+      ObjectClassName(obj) == "com/roblox/universalapp/messagebus/RequestHandlerRaw") {
+    VM* vm = CurrentVM();
+    return vm ? vm->DispatchMessageBusRequestHandler(
+                    obj, vm->GetJNIEnv(), static_cast<jstring>(args[0].l))
+              : nullptr;
+  }
+  jobject result = nullptr;
+  if (LocalStorageObjectResultForMethodA(name, args, &result)) return result;
+  if (CookieObjectResultForMethodA(name, args, &result)) return result;
+  if (args && std::strcmp(name, "getSystemService") == 0)
+    return SystemServiceObject(StringFromJString(reinterpret_cast<jstring>(args[0].l)));
+  if (args && (std::strcmp(name, "loadClass") == 0 || std::strcmp(name, "findClass") == 0))
+    return ClassObjectForName(StringFromJString(reinterpret_cast<jstring>(args[0].l)));
+  if (args && std::strcmp(name, "getString") == 0)
+    return args[1].l ? args[1].l : MakeString("");
+  result = ObjectResultForReceiverMethod(obj, name);
+  return result ? result : ObjectResultForMethod(methodID);
+}
+jboolean JniCallBooleanV(JNIEnv*, jobject obj, jmethodID methodID, va_list args) {
+  jboolean result = JNI_FALSE;
+  if (HandleWebRtcAudioManagerBooleanMethod(obj, methodID, &result) ||
+      HandleWebRtcAudioRecordBooleanMethodV(obj, methodID, args, &result) ||
+      HandleWebRtcAudioTrackBooleanMethodV(obj, methodID, args, &result) ||
+      HandleFmodAudioDeviceBooleanMethodV(obj, methodID, args, &result) ||
+      PackageManagerBooleanResultForMethodV(obj, methodID, args, &result) ||
+      LocalStorageBooleanResultForMethodV(MethodName(methodID), args, &result) ||
+      CookieBooleanResultForMethod(MethodName(methodID), &result))
+    return result;
+  return BooleanResultForReceiverMethod(obj, MethodName(methodID));
+}
+jboolean JniCallBooleanA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue* args) {
+  jboolean result = JNI_FALSE;
+  if (HandleWebRtcAudioManagerBooleanMethod(obj, methodID, &result) ||
+      HandleWebRtcAudioRecordBooleanMethodA(obj, methodID, args, &result) ||
+      HandleWebRtcAudioTrackBooleanMethodA(obj, methodID, args, &result) ||
+      HandleFmodAudioDeviceBooleanMethodA(obj, methodID, args, &result) ||
+      PackageManagerBooleanResultForMethodA(obj, methodID, args, &result) ||
+      LocalStorageBooleanResultForMethodA(MethodName(methodID), args, &result) ||
+      CookieBooleanResultForMethod(MethodName(methodID), &result))
+    return result;
+  return BooleanResultForReceiverMethod(obj, MethodName(methodID));
+}
+jint JniCallIntV(JNIEnv*, jobject obj, jmethodID methodID, va_list args) {
+  jint result = 0;
+  if (HandleWebRtcAudioRecordIntMethodV(obj, methodID, args, &result) ||
+      HandleWebRtcAudioTrackIntMethodV(obj, methodID, args, &result))
+    return result;
+  return IntResultForReceiverMethod(obj, MethodName(methodID));
+}
+jint JniCallIntA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue* args) {
+  jint result = 0;
+  if (HandleWebRtcAudioRecordIntMethodA(obj, methodID, args, &result) ||
+      HandleWebRtcAudioTrackIntMethodA(obj, methodID, args, &result))
+    return result;
+  return IntResultForReceiverMethod(obj, MethodName(methodID));
+}
+jlong JniCallLongV(JNIEnv*, jobject obj, jmethodID methodID, va_list) {
+  jlong result = 0;
+  if (LocalStorageLongResultForMethod(MethodName(methodID), &result)) return result;
+  return LongResultForReceiverMethod(obj, MethodName(methodID));
+}
+jlong JniCallLongA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue*) {
+  jlong result = 0;
+  if (LocalStorageLongResultForMethod(MethodName(methodID), &result)) return result;
+  return LongResultForReceiverMethod(obj, MethodName(methodID));
+}
+jfloat JniCallFloatV(JNIEnv*, jobject obj, jmethodID methodID, va_list) {
+  return FloatResultForReceiverMethod(obj, MethodName(methodID));
+}
+jfloat JniCallFloatA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue*) {
+  return FloatResultForReceiverMethod(obj, MethodName(methodID));
+}
+
+}  // namespace
+
 void VM::InitJNIFunctionTables() {
   invoke_interface_.AttachCurrentThread =
       [](JavaVM* vm, void** env, void* args) -> jint {
@@ -6947,444 +7115,69 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.CallStaticVoidMethod = CallStaticVoidMethod;
-
-  native_interface_.CallStaticVoidMethodV =
-      [](JNIEnv* env, jclass clazz, jmethodID methodID, va_list args) {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticVoidMethodV: " << MethodName(methodID) << '\n';
-    }
-    HandleStaticVoidMethodV(env, clazz, methodID, args);
-  };
-
-  native_interface_.CallStaticVoidMethodA =
-      [](JNIEnv* env, jclass clazz, jmethodID methodID,
-         const jvalue* args) {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticVoidMethodA: " << MethodName(methodID) << '\n';
-    }
-    HandleStaticVoidMethodA(env, clazz, methodID, args);
-  };
-
+  native_interface_.CallStaticVoidMethodV = JniCallStaticVoidV;
+  native_interface_.CallStaticVoidMethodA = JniCallStaticVoidA;
   native_interface_.CallStaticObjectMethod = CallStaticObjectMethod;
-
-  native_interface_.CallStaticObjectMethodV = [](JNIEnv * /*env*/, jclass clazz,
-                                                 jmethodID methodID,
-                                                 va_list args) -> jobject {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticObjectMethodV: " << MethodName(methodID)
-                << '\n';
-    }
-    jobject result = ObjectResultForMethodV(nullptr, methodID, args);
-    if (result != nullptr) {
-      return result;
-    }
-    result = ExactMessageBusStaticObject(clazz, methodID);
-    return result != nullptr ? result : StaticObjectResultForMethod(methodID);
-  };
-
-  native_interface_.CallStaticObjectMethodA =
-      [](JNIEnv * /*env*/, jclass clazz, jmethodID methodID,
-         const jvalue *args) -> jobject {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticObjectMethodA: " << MethodName(methodID)
-                << '\n';
-    }
-    const char *name = MethodName(methodID);
-    if (args && std::strcmp(name, "forName") == 0) {
-      return ClassObjectForName(
-          StringFromJString(reinterpret_cast<jstring>(args[0].l)));
-    }
-    jobject cookie_result = nullptr;
-    if (CookieObjectResultForMethodA(name, args, &cookie_result)) {
-      return cookie_result;
-    }
-    jobject message_bus = ExactMessageBusStaticObject(clazz, methodID);
-    if (message_bus != nullptr) {
-      return message_bus;
-    }
-    return StaticObjectResultForMethod(methodID);
-  };
-
+  native_interface_.CallStaticObjectMethodV = JniCallStaticObjectV;
+  native_interface_.CallStaticObjectMethodA = JniCallStaticObjectA;
   native_interface_.CallStaticBooleanMethod = CallStaticBooleanMethod;
-
-  native_interface_.CallStaticBooleanMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID, va_list /*args*/) -> jboolean {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticBooleanMethodV: " << MethodName(methodID) << '\n';
-    }
-    jboolean result = JNI_FALSE;
-    const char* name = MethodName(methodID);
-    if (std::strcmp(name, "isSystemThemeAvailable") == 0) {
-      return JNI_TRUE;
-    }
-    if (FmodBooleanResultForMethod(name, &result)) {
-      return result;
-    }
-    return CookieBooleanResultForMethod(name, &result) ? result : JNI_FALSE;
-  };
-
-  native_interface_.CallStaticBooleanMethodA =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID,
-         const jvalue* /*args*/) -> jboolean {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticBooleanMethodA: " << MethodName(methodID) << '\n';
-    }
-    jboolean result = JNI_FALSE;
-    const char* name = MethodName(methodID);
-    if (std::strcmp(name, "isSystemThemeAvailable") == 0) {
-      return JNI_TRUE;
-    }
-    if (FmodBooleanResultForMethod(name, &result)) {
-      return result;
-    }
-    return CookieBooleanResultForMethod(name, &result) ? result : JNI_FALSE;
-  };
-
-  native_interface_.CallStaticByteMethod = CallStaticByteMethod;
-  native_interface_.CallStaticByteMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jbyte { return 0; };
-  native_interface_.CallStaticByteMethodA =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jbyte { return 0; };
-
-  native_interface_.CallStaticCharMethod = CallStaticCharMethod;
-  native_interface_.CallStaticCharMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jchar { return 0; };
-  native_interface_.CallStaticCharMethodA =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jchar { return 0; };
-
-  native_interface_.CallStaticShortMethod = CallStaticShortMethod;
-  native_interface_.CallStaticShortMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jshort { return 0; };
-  native_interface_.CallStaticShortMethodA =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jshort { return 0; };
-
+  native_interface_.CallStaticBooleanMethodV = JniCallStaticBooleanV;
+  native_interface_.CallStaticBooleanMethodA = JniCallStaticBooleanA;
+  native_interface_.CallStaticByteMethod = [](JNIEnv*, jclass, jmethodID, ...) -> jbyte { return 0; };
+  native_interface_.CallStaticByteMethodV = [](JNIEnv*, jclass, jmethodID, va_list) -> jbyte { return 0; };
+  native_interface_.CallStaticByteMethodA = [](JNIEnv*, jclass, jmethodID, const jvalue*) -> jbyte { return 0; };
+  native_interface_.CallStaticCharMethod = [](JNIEnv*, jclass, jmethodID, ...) -> jchar { return 0; };
+  native_interface_.CallStaticCharMethodV = [](JNIEnv*, jclass, jmethodID, va_list) -> jchar { return 0; };
+  native_interface_.CallStaticCharMethodA = [](JNIEnv*, jclass, jmethodID, const jvalue*) -> jchar { return 0; };
+  native_interface_.CallStaticShortMethod = [](JNIEnv*, jclass, jmethodID, ...) -> jshort { return 0; };
+  native_interface_.CallStaticShortMethodV = [](JNIEnv*, jclass, jmethodID, va_list) -> jshort { return 0; };
+  native_interface_.CallStaticShortMethodA = [](JNIEnv*, jclass, jmethodID, const jvalue*) -> jshort { return 0; };
   native_interface_.CallStaticIntMethod = CallStaticIntMethod;
-
-  native_interface_.CallStaticIntMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID, va_list args) -> jint {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticIntMethodV: " << MethodName(methodID) << '\n';
-    }
-    return StaticIntResultForMethodV(methodID, args);
-  };
-
-  native_interface_.CallStaticIntMethodA =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID,
-         const jvalue* args) -> jint {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticIntMethodA: " << MethodName(methodID) << '\n';
-    }
-    return StaticIntResultForMethodA(methodID, args);
-  };
-
+  native_interface_.CallStaticIntMethodV = JniCallStaticIntV;
+  native_interface_.CallStaticIntMethodA = JniCallStaticIntA;
   native_interface_.CallStaticLongMethod = CallStaticLongMethod;
-
-  native_interface_.CallStaticLongMethodV =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID, va_list /*args*/) -> jlong {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticLongMethodV: " << MethodName(methodID) << '\n';
-    }
-    return StaticLongResultForMethod(methodID);
-  };
-
-  native_interface_.CallStaticLongMethodA =
-      [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID methodID,
-         const jvalue * /*args*/) -> jlong {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallStaticLongMethodA: " << MethodName(methodID) << '\n';
-    }
-    return StaticLongResultForMethod(methodID);
-  };
-
+  native_interface_.CallStaticLongMethodV = JniCallStaticLongV;
+  native_interface_.CallStaticLongMethodA = JniCallStaticLongA;
   native_interface_.CallStaticFloatMethod = CallStaticFloatMethod;
-  native_interface_.CallStaticFloatMethodV =
-      [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jfloat { return 0.0f; };
-  native_interface_.CallStaticFloatMethodA =
-      [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         const jvalue * /*args*/) -> jfloat { return 0.0f; };
-
+  native_interface_.CallStaticFloatMethodV = JniCallStaticFloatV;
+  native_interface_.CallStaticFloatMethodA = JniCallStaticFloatA;
   native_interface_.CallStaticDoubleMethod = CallStaticDoubleMethod;
-  native_interface_.CallStaticDoubleMethodV =
-      [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jdouble { return 0.0; };
-  native_interface_.CallStaticDoubleMethodA =
-      [](JNIEnv * /*env*/, jclass /*clazz*/, jmethodID /*methodID*/,
-         const jvalue * /*args*/) -> jdouble { return 0.0; };
+  native_interface_.CallStaticDoubleMethodV = JniCallStaticDoubleV;
+  native_interface_.CallStaticDoubleMethodA = JniCallStaticDoubleA;
 
   native_interface_.CallVoidMethod = CallVoidMethod;
-
-  native_interface_.CallVoidMethodV = [](JNIEnv * /*env*/, jobject obj,
-                                         jmethodID methodID, va_list args) {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallVoidMethodV: " << MethodName(methodID) << '\n';
-    }
-    if (!HandleRobloxExperienceLifecycleVoidMethod(obj, methodID) &&
-        !HandleWebRtcAudioManagerVoidMethodV(obj, methodID, args) &&
-        !HandleRobloxOpenWebActivityMethodV(obj, methodID, args) &&
-        !HandleRobloxTextInputInstanceVoidMethodV(obj, methodID, args) &&
-        !HandleFmodAudioDeviceVoidMethodV(obj, methodID, args) &&
-        !HandleRobloxCookieSetVoidMethodV(obj, methodID, args) &&
-        !HandleMemStorageCallbackVoidMethodV(obj, methodID, args)) {
-      HandleVoidMethod(obj, methodID, args);
-    }
-  };
-
-  native_interface_.CallVoidMethodA = [](JNIEnv * /*env*/, jobject obj,
-                                         jmethodID methodID,
-                                         const jvalue *args) {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallVoidMethodA: " << MethodName(methodID) << '\n';
-    }
-    if (!HandleRobloxExperienceLifecycleVoidMethod(obj, methodID) &&
-        !HandleWebRtcAudioManagerVoidMethodA(obj, methodID, args) &&
-        !HandleRobloxOpenWebActivityMethodA(obj, methodID, args) &&
-        !HandleRobloxTextInputInstanceVoidMethodA(obj, methodID, args) &&
-        !HandleFmodAudioDeviceVoidMethodA(obj, methodID, args) &&
-        !HandleRobloxCookieSetVoidMethodA(obj, methodID, args) &&
-        !HandleMemStorageCallbackVoidMethodA(obj, methodID, args)) {
-      HandleVoidMethodA(obj, methodID, args);
-    }
-  };
-
+  native_interface_.CallVoidMethodV = JniCallVoidV;
+  native_interface_.CallVoidMethodA = JniCallVoidA;
   native_interface_.CallObjectMethod = CallObjectMethod;
-
   native_interface_.CallObjectMethodV =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         va_list args) -> jobject {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallObjectMethodV: " << MethodName(methodID) << '\n';
-    }
+      [](JNIEnv*, jobject obj, jmethodID methodID, va_list args) -> jobject {
     return ObjectResultForMethodV(obj, methodID, args);
   };
-
-  native_interface_.CallObjectMethodA =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         const jvalue* args) -> jobject {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallObjectMethodA: " << MethodName(methodID) << '\n';
-    }
-    const char* name = MethodName(methodID);
-    if (IsJavaStringGetBytesMethod(obj, methodID)) {
-      return args != nullptr
-                 ? JavaStringGetUtf8Bytes(
-                       obj, static_cast<jstring>(args[0].l))
-                 : nullptr;
-    }
-    if (args && std::strcmp(name, "run") == 0 &&
-        ObjectClassName(obj) ==
-            "com/roblox/universalapp/messagebus/RequestHandlerRaw") {
-      VM* vm = CurrentVM();
-      return vm != nullptr
-                 ? vm->DispatchMessageBusRequestHandler(
-                       obj, vm->GetJNIEnv(), static_cast<jstring>(args[0].l))
-                 : nullptr;
-    }
-    jobject local_storage_result = nullptr;
-    if (LocalStorageObjectResultForMethodA(name, args, &local_storage_result)) {
-      return local_storage_result;
-    }
-    jobject cookie_result = nullptr;
-    if (CookieObjectResultForMethodA(name, args, &cookie_result)) {
-      return cookie_result;
-    }
-    if (args && std::strcmp(name, "getSystemService") == 0) {
-      return SystemServiceObject(StringFromJString(
-          reinterpret_cast<jstring>(args[0].l)));
-    }
-    if (args && (std::strcmp(name, "loadClass") == 0 ||
-                 std::strcmp(name, "findClass") == 0)) {
-      return ClassObjectForName(StringFromJString(
-          reinterpret_cast<jstring>(args[0].l)));
-    }
-    if (args && std::strcmp(name, "getString") == 0) {
-      return args[1].l ? args[1].l : MakeString("");
-    }
-    jobject receiver_result = ObjectResultForReceiverMethod(obj, name);
-    return receiver_result ? receiver_result : ObjectResultForMethod(methodID);
-  };
-
+  native_interface_.CallObjectMethodA = JniCallObjectA;
   native_interface_.CallBooleanMethod = CallBooleanMethod;
-
-  native_interface_.CallBooleanMethodV =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         va_list args) -> jboolean {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallBooleanMethodV: " << MethodName(methodID) << '\n';
-    }
-    jboolean result = JNI_FALSE;
-    if (HandleWebRtcAudioManagerBooleanMethod(obj, methodID, &result)) {
-      return result;
-    }
-    if (HandleWebRtcAudioRecordBooleanMethodV(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (HandleWebRtcAudioTrackBooleanMethodV(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (HandleFmodAudioDeviceBooleanMethodV(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (PackageManagerBooleanResultForMethodV(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (LocalStorageBooleanResultForMethodV(MethodName(methodID), args,
-                                            &result)) {
-      return result;
-    }
-    if (CookieBooleanResultForMethod(MethodName(methodID), &result)) {
-      return result;
-    }
-    return BooleanResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
-  native_interface_.CallBooleanMethodA =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         const jvalue* args) -> jboolean {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallBooleanMethodA: " << MethodName(methodID) << '\n';
-    }
-    jboolean result = JNI_FALSE;
-    if (HandleWebRtcAudioManagerBooleanMethod(obj, methodID, &result)) {
-      return result;
-    }
-    if (HandleWebRtcAudioRecordBooleanMethodA(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (HandleWebRtcAudioTrackBooleanMethodA(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (HandleFmodAudioDeviceBooleanMethodA(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (PackageManagerBooleanResultForMethodA(obj, methodID, args, &result)) {
-      return result;
-    }
-    if (LocalStorageBooleanResultForMethodA(MethodName(methodID), args,
-                                            &result)) {
-      return result;
-    }
-    if (CookieBooleanResultForMethod(MethodName(methodID), &result)) {
-      return result;
-    }
-    return BooleanResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
+  native_interface_.CallBooleanMethodV = JniCallBooleanV;
+  native_interface_.CallBooleanMethodA = JniCallBooleanA;
   native_interface_.CallByteMethod = CallByteMethod;
-  native_interface_.CallByteMethodV =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jbyte { return 0; };
-  native_interface_.CallByteMethodA =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jbyte { return 0; };
-
+  native_interface_.CallByteMethodV = JniZeroByteV;
+  native_interface_.CallByteMethodA = JniZeroByteA;
   native_interface_.CallCharMethod = CallCharMethod;
-  native_interface_.CallCharMethodV =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jchar { return 0; };
-  native_interface_.CallCharMethodA =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jchar { return 0; };
-
+  native_interface_.CallCharMethodV = JniZeroCharV;
+  native_interface_.CallCharMethodA = JniZeroCharA;
   native_interface_.CallShortMethod = CallShortMethod;
-  native_interface_.CallShortMethodV =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jshort { return 0; };
-  native_interface_.CallShortMethodA =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jshort { return 0; };
-
+  native_interface_.CallShortMethodV = JniZeroShortV;
+  native_interface_.CallShortMethodA = JniZeroShortA;
   native_interface_.CallIntMethod = CallIntMethod;
-
-  native_interface_.CallIntMethodV = [](JNIEnv * /*env*/, jobject obj,
-                                        jmethodID methodID,
-                                        va_list args) -> jint {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallIntMethodV: " << MethodName(methodID) << '\n';
-    }
-    jint result = 0;
-    if (HandleWebRtcAudioRecordIntMethodV(obj, methodID, args, &result) ||
-        HandleWebRtcAudioTrackIntMethodV(obj, methodID, args, &result)) {
-      return result;
-    }
-    return IntResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
-  native_interface_.CallIntMethodA = [](JNIEnv * /*env*/, jobject obj,
-                                        jmethodID methodID,
-                                        const jvalue *args) -> jint {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallIntMethodA: " << MethodName(methodID) << '\n';
-    }
-    jint result = 0;
-    if (HandleWebRtcAudioRecordIntMethodA(obj, methodID, args, &result) ||
-        HandleWebRtcAudioTrackIntMethodA(obj, methodID, args, &result)) {
-      return result;
-    }
-    return IntResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
+  native_interface_.CallIntMethodV = JniCallIntV;
+  native_interface_.CallIntMethodA = JniCallIntA;
   native_interface_.CallLongMethod = CallLongMethod;
-
-  native_interface_.CallLongMethodV =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID, va_list /*args*/) -> jlong {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallLongMethodV: " << MethodName(methodID) << '\n';
-    }
-    jlong result = 0;
-    if (LocalStorageLongResultForMethod(MethodName(methodID), &result)) {
-      return result;
-    }
-    return LongResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
-  native_interface_.CallLongMethodA =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         const jvalue* /*args*/) -> jlong {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallLongMethodA: " << MethodName(methodID) << '\n';
-    }
-    jlong result = 0;
-    if (LocalStorageLongResultForMethod(MethodName(methodID), &result)) {
-      return result;
-    }
-    return LongResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
+  native_interface_.CallLongMethodV = JniCallLongV;
+  native_interface_.CallLongMethodA = JniCallLongA;
   native_interface_.CallFloatMethod = CallFloatMethod;
-  native_interface_.CallFloatMethodV =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         va_list /*args*/) -> jfloat {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallFloatMethodV: " << MethodName(methodID)
-                << '\n';
-    }
-    return FloatResultForReceiverMethod(obj, MethodName(methodID));
-  };
-  native_interface_.CallFloatMethodA =
-      [](JNIEnv* /*env*/, jobject obj, jmethodID methodID,
-         const jvalue* /*args*/) -> jfloat {
-    if (TraceEnabled()) {
-      std::cout << "  [JNI] CallFloatMethodA: " << MethodName(methodID)
-                << '\n';
-    }
-    return FloatResultForReceiverMethod(obj, MethodName(methodID));
-  };
-
+  native_interface_.CallFloatMethodV = JniCallFloatV;
+  native_interface_.CallFloatMethodA = JniCallFloatA;
   native_interface_.CallDoubleMethod = CallDoubleMethod;
-  native_interface_.CallDoubleMethodV =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         va_list /*args*/) -> jdouble { return 0.0; };
-  native_interface_.CallDoubleMethodA =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jmethodID /*methodID*/,
-         const jvalue* /*args*/) -> jdouble { return 0.0; };
-
+  native_interface_.CallDoubleMethodV = JniZeroDoubleV;
+  native_interface_.CallDoubleMethodA = JniZeroDoubleA;
   native_interface_.GetStaticObjectField =
       [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID fieldID) -> jobject {
     if (TraceEnabled()) {
