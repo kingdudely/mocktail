@@ -1,8 +1,10 @@
 #include "runtime/roblox_auth_transport.h"
 
 #include <netdb.h>
+#include <netinet/in.h>
 #include <openssl/ssl.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -13,6 +15,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -321,14 +324,13 @@ RobloxLaunchTicketAuthResult RedeemRobloxLaunchTicket(
 
   const std::string ca_file = AssetCaBundle(asset_root);
   TlsHttpClient client(ca_file);
-  const std::string body =
+  std::string body =
       nlohmann::json{{"authenticationTicket", std::string(ticket)}}.dump();
 
   HttpResponse redeemed = client.Request(
       kRedeemHost, kRedeemPath, "POST", body, "",
       "RBXAuthenticationNegotiation: 1\r\n");
-  std::string body_scrub = body;
-  ClearSensitive(&body_scrub);
+  ClearSensitive(&body);
 
   if (!redeemed.error.empty())
     return Failure(redeemed.error);
