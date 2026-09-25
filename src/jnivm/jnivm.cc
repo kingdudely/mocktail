@@ -2419,57 +2419,58 @@ jobject SystemServiceObject(const std::string& service_name) {
 }
 
 jobject AndroidObjectForMethod(const char* name) {
-  if (!name) {
-    return nullptr;
+  if (!name) return nullptr;
+
+  struct Mapping { const char* name; const char* class_name; };
+  static constexpr Mapping kSingletons[] = {
+      {"currentActivity", "com/roblox/client/startup/MainGameActivity"},
+      {"getActivity", "com/roblox/client/startup/MainGameActivity"},
+      {"getApplicationContext", "android/content/Context"},
+      {"getBaseContext", "android/content/Context"},
+      {"getContext", "android/content/Context"},
+      {"getAssets", "android/content/res/AssetManager"},
+      {"getAssetManager", "android/content/res/AssetManager"},
+      {"getResources", "android/content/res/Resources"},
+      {"getClassLoader", "java/lang/ClassLoader"},
+      {"getSharedPreferences", "android/content/SharedPreferences"},
+      {"edit", "android/content/SharedPreferences$Editor"},
+      {"getPackageManager", "android/content/pm/PackageManager"},
+      {"getWindow", "android/view/Window"},
+      {"getWindowManager", "android/view/WindowManager"},
+      {"getDefaultDisplay", "android/view/Display"},
+      {"getDisplay", "android/view/Display"},
+      {"getDecorView", "android/view/View"},
+      {"getRootView", "android/view/View"},
+      {"getHolder", "android/view/SurfaceHolder"},
+      {"getSurface", "android/view/Surface"},
+      {"getPlatformSystemDialogHandler",
+       "com/roblox/protocols/systemdialog/PlatformSystemDialogHandler"},
+      {"getSystemDialogHandler",
+       "com/roblox/protocols/systemdialog/PlatformSystemDialogHandler"},
+  };
+  for (const auto& mapping : kSingletons) {
+    if (std::strcmp(name, mapping.name) == 0) {
+      return SingletonObject(mapping.class_name);
+    }
   }
-  if (std::strcmp(name, "currentActivity") == 0 ||
-      std::strcmp(name, "getActivity") == 0) {
-    return SingletonObject("com/roblox/client/startup/MainGameActivity");
-  }
-  if (std::strcmp(name, "getApplicationContext") == 0 ||
-      std::strcmp(name, "getBaseContext") == 0 ||
-      std::strcmp(name, "getContext") == 0) {
-    return SingletonObject("android/content/Context");
-  }
-  if (std::strcmp(name, "getAssets") == 0) {
-    return SingletonObject("android/content/res/AssetManager");
-  }
-  if (std::strcmp(name, "getAssetManager") == 0) {
-    return SingletonObject("android/content/res/AssetManager");
-  }
-  if (std::strcmp(name, "getResources") == 0) {
-    return SingletonObject("android/content/res/Resources");
-  }
-  if (std::strcmp(name, "getClassLoader") == 0) {
-    return SingletonObject("java/lang/ClassLoader");
-  }
-  if (std::strcmp(name, "getSharedPreferences") == 0) {
-    return SingletonObject("android/content/SharedPreferences");
-  }
-  if (std::strcmp(name, "edit") == 0) {
-    return SingletonObject("android/content/SharedPreferences$Editor");
-  }
-  if (std::strcmp(name, "getPackageManager") == 0) {
-    return SingletonObject("android/content/pm/PackageManager");
-  }
+
   if (std::strcmp(name, "getApplicationInfo") == 0) {
     return MakeApplicationInfoObject();
   }
+  if (std::strcmp(name, "getPackageInfo") == 0) {
+    return MakePackageInfoObject();
+  }
   if (std::strcmp(name, "getDeviceStaticParams") == 0) {
     return MakeDeviceStaticParamsObject();
-  }
-  if (std::strcmp(name, "getPlatformSystemDialogHandler") == 0 ||
-      std::strcmp(name, "getSystemDialogHandler") == 0) {
-    return MakePlatformSystemDialogHandlerObject();
-  }
-  if (std::strcmp(name, "getImplementation") == 0) {
-    return EngineJavaCallbackObject();
   }
   if (std::strcmp(name, "getTextBoxInfo") == 0 ||
       std::strcmp(name, "getNativeTextBoxInfo") == 0 ||
       std::strcmp(name, "getCurrentTextBoxInfo") == 0 ||
       std::strcmp(name, "nativeGetTextBoxInfo") == 0) {
     return MakeNativeTextBoxInfoObject();
+  }
+  if (std::strcmp(name, "getImplementation") == 0) {
+    return EngineJavaCallbackObject();
   }
   if (std::strcmp(name, "getMessageBus") == 0 ||
       std::strcmp(name, "getMessageBusConnection") == 0 ||
@@ -2481,30 +2482,6 @@ jobject AndroidObjectForMethod(const char* name) {
       std::strcmp(name, "subscribeProtocolMethodResponseRaw") == 0) {
     return MakeMessageBusConnectionObject();
   }
-  if (std::strcmp(name, "getPackageInfo") == 0) {
-    return MakePackageInfoObject();
-  }
-  if (std::strcmp(name, "getWindow") == 0) {
-    return SingletonObject("android/view/Window");
-  }
-  if (std::strcmp(name, "getWindowManager") == 0 ||
-      std::strcmp(name, "getSystemService") == 0) {
-    return SingletonObject("android/view/WindowManager");
-  }
-  if (std::strcmp(name, "getDefaultDisplay") == 0 ||
-      std::strcmp(name, "getDisplay") == 0) {
-    return SingletonObject("android/view/Display");
-  }
-  if (std::strcmp(name, "getDecorView") == 0 ||
-      std::strcmp(name, "getRootView") == 0) {
-    return SingletonObject("android/view/View");
-  }
-  if (std::strcmp(name, "getHolder") == 0) {
-    return SingletonObject("android/view/SurfaceHolder");
-  }
-  if (std::strcmp(name, "getSurface") == 0) {
-    return SingletonObject("android/view/Surface");
-  }
   if (std::strcmp(name, "getFilesDir") == 0) {
     return MakeFileObject("/data/user/0/com.roblox.client/files");
   }
@@ -2512,8 +2489,7 @@ jobject AndroidObjectForMethod(const char* name) {
     return MakeFileObject("/data/user/0/com.roblox.client/cache");
   }
   if (std::strcmp(name, "getExternalFilesDir") == 0) {
-    return MakeFileObject(
-        "/sdcard/Android/data/com.roblox.client/files");
+    return MakeFileObject("/sdcard/Android/data/com.roblox.client/files");
   }
   if (std::strcmp(name, "loadClass") == 0 ||
       std::strcmp(name, "findClass") == 0) {
