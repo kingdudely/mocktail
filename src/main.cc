@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "legacy/legacy_runtime.h"
 #include "mocktail/audio/fmod_jni_audio_bridge.h"
@@ -48,7 +49,7 @@ int JoinRequestType(const mocktail::runtime::RobloxLaunchRequest& request) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  const mocktail::runtime::CommandLineParseResult command_line =
+  mocktail::runtime::CommandLineParseResult command_line =
       mocktail::runtime::ParseCommandLine(argc, argv);
   if (!command_line) {
     std::cerr << command_line.error << "\n\n"
@@ -57,9 +58,9 @@ int main(int argc, char* argv[]) {
     return EXIT_FAILURE;
   }
 
-  const mocktail::runtime::CommandLineOptions& options =
-      command_line.options;
-  std::string roblosecurity = options.roblosecurity;
+  mocktail::runtime::CommandLineOptions options =
+      std::move(command_line.options);
+  std::string roblosecurity = std::move(options.roblosecurity);
   mocktail::runtime::RobloxLaunchRequest launch_request;
 
   if (!options.launch_uri.empty()) {
@@ -72,6 +73,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  std::fill(options.launch_uri.begin(), options.launch_uri.end(), '\0');
+  options.launch_uri.clear();
   ScrubArgv(argc, argv);
 
   if (options.place_id.has_value())
