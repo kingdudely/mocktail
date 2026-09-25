@@ -23,6 +23,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 target_link_libraries(jnivm PUBLIC Threads::Threads)
 
+set(MOCKTAIL_JNI_INCLUDE_DIRS
+  ${CMAKE_SOURCE_DIR}/third_party/libjnivm/include)
+
 add_subdirectory(third_party/mcpelauncher-linker)
 
 find_path(MOCKTAIL_VULKAN_INCLUDE_DIR vulkan/vulkan.h REQUIRED)
