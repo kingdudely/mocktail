@@ -11,14 +11,16 @@ find_package(Threads REQUIRED)
 
 # libjnivm owns the JNI object/reference/string/method machinery. Mocktail only
 # supplies the native Android/Roblox classes and their behavior.
+set(JNIVM_ENABLE_TRACE OFF CACHE BOOL "" FORCE)
+set(JNIVM_ENABLE_GC ON CACHE BOOL "" FORCE)
+set(JNIVM_ENABLE_DEBUG OFF CACHE BOOL "" FORCE)
+set(JNIVM_ENABLE_RETURN_NON_ZERO ON CACHE BOOL "" FORCE)
+set(JNIVM_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(JNIVM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_definitions(jnivm PRIVATE jnivm=mocktail_libjnivm)
 endif()
-target_compile_definitions(jnivm PRIVATE
-  JNIVM_FAKE_JNI_SYNTAX=0
-  JNIVM_ENABLE_RETURN_NON_ZERO
-  -DJNIVM_ENABLE_GC)
 target_link_libraries(jnivm PUBLIC Threads::Threads)
 
 add_subdirectory(third_party/mcpelauncher-linker)
@@ -48,8 +50,7 @@ mocktail_apply_compile_options(mocktail_bionic_stdio_runtime)
 add_library(Mocktail::BionicStdio ALIAS mocktail_bionic_stdio_runtime)
 
 add_library(mocktail_legacy_jnivm STATIC
-  src/jnivm/jnivm.cc
-  src/jnivm/native_android_objects.cc)
+  src/jnivm/jnivm.cc)
 target_include_directories(mocktail_legacy_jnivm PUBLIC
   include
   ${CMAKE_SOURCE_DIR}/third_party/libjnivm/include
