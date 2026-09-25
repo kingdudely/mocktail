@@ -2,8 +2,9 @@
 
 Minimal Linux Roblox compatibility runtime with a browser-first launcher.
 
-The executable is named `roblox`. Mocktail does not download Roblox. Put the
-prepared Roblox native library and assets beside the executable:
+The executable is named `roblox`. Mocktail does not download Roblox. By
+default it looks for the prepared Roblox native library and assets beside the
+executable:
 
 ```text
 roblox
@@ -44,7 +45,7 @@ A browser URI can also be passed directly:
 For debugging without a window:
 
 ```sh
-./roblox --headless
+./roblox --headless --libroblox_so=~/libroblox.so --assets_dir=~/assets
 ```
 
 There are intentionally no place/server/cookie command-line options in the
@@ -52,8 +53,9 @@ launcher. Browser launch data is the source of truth. A small shell script can
 construct a `roblox-player:` URI later when you need manual testing.
 
 The runtime uses `ROBLOX_LIB_PATH` and `MOCKTAIL_ASSET_PATH` internally. When
-those are not already set, they default to `libroblox.so` and `assets/` next
-to the `roblox` executable.
+those are not already set, they default to `./libroblox.so` and `./assets/`
+relative to the `roblox` executable. Override the payload location with
+`--libroblox_so=<path>` and `--assets_dir=<path>`.
 
 ## Build
 
@@ -68,5 +70,6 @@ The resulting executable is:
 ./roblox
 ```
 
-The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, libcurl,
-nlohmann-json, libelf, utf8proc, fontconfig, and a C++17 toolchain.
+The host needs a JDK development package for JNI headers, plus SDL3, SDL3_ttf,
+Vulkan/EGL/GLES headers, OpenSSL, libcurl, nlohmann-json, libelf, utf8proc,
+fontconfig, and a C++17 toolchain.
