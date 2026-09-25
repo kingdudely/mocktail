@@ -1052,9 +1052,6 @@ void VM::InstallHooks() {
       [](JNIEnv*, jobject) {});
 }
 
-}  // namespace jnivm
-
-
 jobject CreateAndroidConfiguration(JNIEnv* env) {
   if (env == nullptr) return nullptr;
   auto* e = mocktail_libjnivm::ENV::FromJNIEnv(env);
@@ -1081,3 +1078,5 @@ jobject CreateAndroidConfiguration(JNIEnv* env) {
       std::shared_ptr<Object>>::ToJNIType(e, config);
 }
 
+
+}  // namespace jnivm
