@@ -803,16 +803,6 @@ void ReleaseJniReference(jobject obj) {
 }
 
 
-AndroidContext* AndroidContextFromRef(jobject obj) {
-  NativeObject* object = NativeObjectFromRef(obj);
-  return dynamic_cast<AndroidContext*>(object);
-}
-
-AndroidPackageManager* AndroidPackageManagerFromRef(jobject obj) {
-  NativeObject* object = NativeObjectFromRef(obj);
-  return dynamic_cast<AndroidPackageManager*>(object);
-}
-
 NativeObject* NativeObjectFromRef(jobject obj) {
   if (__builtin_expect(obj == nullptr, 0)) {
     return nullptr;
@@ -828,6 +818,16 @@ NativeObject* NativeObjectFromRef(jobject obj) {
     }
   }
   return nullptr;
+}
+
+AndroidContext* AndroidContextFromRef(jobject obj) {
+  NativeObject* object = NativeObjectFromRef(obj);
+  return dynamic_cast<AndroidContext*>(object);
+}
+
+AndroidPackageManager* AndroidPackageManagerFromRef(jobject obj) {
+  NativeObject* object = NativeObjectFromRef(obj);
+  return dynamic_cast<AndroidPackageManager*>(object);
 }
 
 jobject MakeObjectForClass(const std::string& class_name) {
@@ -861,11 +861,11 @@ jobject SingletonObject(const std::string& class_name) {
 }
 
 std::string_view ObjectClassName(jobject obj) {
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !pseudo_object->GetClass()) {
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !native_object->GetClass()) {
     return {};
   }
-  return pseudo_object->GetClass()->GetName();
+  return native_object->GetClass()->GetName();
 }
 
 jobject ExactMessageBusStaticObject(jclass clazz, jmethodID method_id) {
