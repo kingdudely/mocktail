@@ -6691,9 +6691,9 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   }
 
   if (is_headless) {
-    std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
-                 "the supported runtime yet.\n";
-    return EXIT_FAILURE;
+    const mocktail::Status audio_shutdown_status =
+        dependencies.ShutdownBeforePlatform();
+    return audio_shutdown_status.ok() ? EXIT_SUCCESS : EXIT_FAILURE;
   }
   if (!real_frame_presented) {
     std::cerr << "[FATAL] Windowed runtime exited without a real presented "
