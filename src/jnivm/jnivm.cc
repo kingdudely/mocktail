@@ -2239,9 +2239,26 @@ jobject MakeFileObject(const char* path) {
 jobject MakeApplicationInfoObject() {
   jobject object = SingletonObject("android/content/pm/ApplicationInfo");
   SetStringFieldRaw(object, "packageName", "com.roblox.client");
-  SetStringFieldRaw(object, "sourceDir", "rbx_bin/sober_apk/base.apk");
-  SetStringFieldRaw(object, "publicSourceDir", "rbx_bin/sober_apk/base.apk");
-  SetStringFieldRaw(object, "nativeLibraryDir", "rbx_bin");
+
+  // The minimal runtime has no APK. Keep ApplicationInfo source paths
+  // synthetic and derive the native library directory from the CLI payload.
+  const char* source_dir = std::getenv("MOCKTAIL_APPLICATION_SOURCE_DIR");
+  if (source_dir == nullptr || source_dir[0] == '\0') {
+    source_dir = ".";
+  }
+  const char* library_path = std::getenv("ROBLOX_LIB_PATH");
+  std::string native_library_dir = ".";
+  if (library_path != nullptr && library_path[0] != '\0') {
+    const std::string path(library_path);
+    const std::size_t slash = path.find_last_of('/');
+    if (slash != std::string::npos && slash > 0) {
+      native_library_dir = path.substr(0, slash);
+    }
+  }
+
+  SetStringFieldRaw(object, "sourceDir", source_dir);
+  SetStringFieldRaw(object, "publicSourceDir", source_dir);
+  SetStringFieldRaw(object, "nativeLibraryDir", native_library_dir.c_str());
   SetStringFieldRaw(object, "dataDir", "/data/user/0/com.roblox.client");
   SetStringFieldRaw(object, "processName", "com.roblox.client");
   SetStringFieldRaw(object, "className", "com.roblox.client.RobloxApplication");

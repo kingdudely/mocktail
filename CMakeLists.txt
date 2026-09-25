@@ -372,7 +372,6 @@ target_link_libraries(mocktail_services PUBLIC
 mocktail_apply_compile_options(mocktail_services)
 
 add_library(mocktail_webview_launcher STATIC
-  src/runtime/webview_helper_launcher.cc
 )
 add_library(Mocktail::WebViewLauncher ALIAS mocktail_webview_launcher)
 target_include_directories(mocktail_webview_launcher PUBLIC include)
