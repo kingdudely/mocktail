@@ -53,8 +53,7 @@ launcher. Browser launch data is the source of truth. A small shell script can
 construct a `roblox-player:` URI later when you need manual testing.
 
 The runtime uses `ROBLOX_LIB_PATH` and `MOCKTAIL_ASSET_PATH` internally. When
-those are not already set, they default to `./libroblox.so` and `./assets/`
-relative to the `roblox` executable. Override the payload location with
+those are not already set, they default to `./libroblox.so` and `./assets/` from the launch directory. Override the payload location with
 `--libroblox_so=<path>` and `--assets_dir=<path>`. A leading `~/` in these
 options is expanded to the user's home directory.
 
