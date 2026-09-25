@@ -10,7 +10,6 @@
 #include "mocktail/audio/webrtc_jni_audio_bridge.h"
 #include "runtime/auth_runtime_composition.h"
 #include "runtime/command_line.h"
-#include "runtime/roblox_auth_transport.h"
 #include "runtime/roblox_launch_uri.h"
 #include "window/window.h"
 
@@ -73,22 +72,6 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  mocktail::runtime::RobloxAuthIdentity identity;
-  if (!launch_request.authentication_ticket.empty() &&
-      roblosecurity.empty()) {
-    const mocktail::runtime::RobloxLaunchTicketAuthResult auth =
-        mocktail::runtime::RedeemRobloxLaunchTicket(
-            launch_request.authentication_ticket, options.asset_path);
-    if (!auth) {
-      std::cerr << "[auth] browser launch ticket redemption failed: "
-                << auth.error << '\n';
-      return EXIT_FAILURE;
-    }
-    roblosecurity = auth.roblosecurity;
-    identity = auth.identity;
-  }
-  mocktail::runtime::SecurelyClearString(
-      &launch_request.authentication_ticket);
   ScrubArgv(argc, argv);
 
   if (options.place_id.has_value())
