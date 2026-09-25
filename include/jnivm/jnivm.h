@@ -273,8 +273,6 @@ public:
   // not reuse the previous VM's native function table.
   JNIEnv *GetJNIEnv();
 
-  std::size_t GetClassCount() const { return class_registry_.size(); }
-
   // Replaces the resolved account identity with an independent copy. Invalid
   // (non-positive) identities are normalized to the unresolved state.
   void SetRobloxAuthIdentity(const RobloxAuthIdentity &identity);
