@@ -8,6 +8,7 @@ project(Mocktail
 
 include(GNUInstallDirs)
 find_package(Threads REQUIRED)
+find_package(JNI REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,21 +35,26 @@ if(MOCKTAIL_ENABLE_UPSTREAM_JNIVM)
 
   add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_include_directories(jnivm PRIVATE ${JNI_INCLUDE_DIRS})
     target_compile_options(jnivm PRIVATE -include string)
   endif()
   target_link_libraries(jnivm PUBLIC Threads::Threads)
 endif()
 
 add_subdirectory(third_party/mcpelauncher-linker)
+
+find_path(MOCKTAIL_VULKAN_INCLUDE_DIR vulkan/vulkan.h REQUIRED)
+add_library(mocktail_vulkan_headers INTERFACE)
+target_include_directories(mocktail_vulkan_headers SYSTEM INTERFACE
+  ${MOCKTAIL_VULKAN_INCLUDE_DIR})
+add_library(Mocktail::VulkanHeaders ALIAS mocktail_vulkan_headers)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(linker PRIVATE -w)
 endif()
 
 set(VULKAN_HEADERS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/Vulkan-Headers EXCLUDE_FROM_ALL)
-
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 
@@ -64,7 +70,7 @@ add_library(Mocktail::BionicStdio ALIAS mocktail_bionic_stdio_runtime)
 
 add_library(mocktail_legacy_jnivm STATIC src/jnivm/jnivm.cc)
 target_include_directories(mocktail_legacy_jnivm PUBLIC
-  include third_party/jni/include)
+  include ${JNI_INCLUDE_DIRS})
 target_link_libraries(mocktail_legacy_jnivm PUBLIC Threads::Threads)
 mocktail_apply_compile_options(mocktail_legacy_jnivm)
 add_library(Mocktail::LegacyJni ALIAS mocktail_legacy_jnivm)
@@ -74,22 +80,18 @@ add_library(mocktail_runtime STATIC
   src/runtime/device_memory_profile.cc
   src/runtime/device_profile.cc
   src/runtime/environment.cc
-  src/runtime/external_launch_broker.cc
   src/runtime/game_session_coordinator.cc
   src/runtime/owned_pthread.cc
   src/runtime/roblox_app_lifecycle.cc
-  src/runtime/roblox_browser_service_bridge.cc
+  src/runtime/roblox_game_session_native_adapter.cc
   src/runtime/roblox_capability_resolver.cc
-  src/runtime/roblox_experience_launch_bridge.cc
   src/runtime/roblox_game_session_native_adapter.cc
   src/runtime/roblox_launch_uri.cc
-  src/runtime/roblox_permissions_bridge.cc
-  src/runtime/roblox_web_view_bridge.cc
   src/runtime/runtime_config.cc
   src/runtime/runtime_paths.cc
   src/runtime/startup_state_machine.cc
 )
-target_include_directories(mocktail_runtime PUBLIC include)
+target_include_directories(mocktail_runtime PUBLIC include ${JNI_INCLUDE_DIRS})
 target_include_directories(mocktail_runtime PRIVATE
   src third_party/jni/include)
 target_link_libraries(mocktail_runtime PUBLIC Threads::Threads)
@@ -99,30 +101,16 @@ target_link_libraries(mocktail_runtime PRIVATE
 mocktail_apply_compile_options(mocktail_runtime)
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
 
-add_library(mocktail_services STATIC
-  src/services/client_settings_service.cc)
-target_include_directories(mocktail_services PUBLIC include)
-target_link_libraries(mocktail_services PUBLIC
-  Mocktail::Runtime nlohmann_json::nlohmann_json)
-mocktail_apply_compile_options(mocktail_services)
-add_library(Mocktail::Services ALIAS mocktail_services)
-
 add_library(mocktail_auth_runtime_composition STATIC
   src/runtime/auth_runtime_composition.cc)
 target_include_directories(mocktail_auth_runtime_composition PUBLIC include)
 target_link_libraries(mocktail_auth_runtime_composition PUBLIC
   Mocktail::LegacyJni Mocktail::Runtime)
+target_link_libraries(mocktail_auth_runtime_composition PRIVATE
+  OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
 mocktail_apply_compile_options(mocktail_auth_runtime_composition)
 add_library(Mocktail::AuthRuntimeComposition ALIAS
   mocktail_auth_runtime_composition)
-
-add_library(mocktail_webview_launcher STATIC
-  src/runtime/webview_helper_launcher.cc)
-target_include_directories(mocktail_webview_launcher PUBLIC include)
-target_link_libraries(mocktail_webview_launcher PUBLIC
-  Mocktail::Runtime)
-mocktail_apply_compile_options(mocktail_webview_launcher)
-add_library(Mocktail::WebViewLauncher ALIAS mocktail_webview_launcher)
 
 add_library(mocktail_linker STATIC src/linker/linker.cc)
 target_include_directories(mocktail_linker PUBLIC include)
@@ -188,20 +176,6 @@ mocktail_apply_compile_options(mocktail_roblox_fullscreen_runtime)
 
 include(${CMAKE_SOURCE_DIR}/cmake/MocktailInput.cmake)
 
-add_library(mocktail_experience_runtime STATIC
-  src/runtime/jnivm_platform_web_callbacks.cc
-  src/runtime/roblox_experience_composition.cc
-  src/runtime/roblox_fresh_game_launch_controller.cc
-  src/runtime/roblox_platform_web_symbols.cc)
-target_include_directories(mocktail_experience_runtime PUBLIC include)
-target_include_directories(mocktail_experience_runtime PRIVATE src)
-target_link_libraries(mocktail_experience_runtime PUBLIC
-  Mocktail::Runtime Mocktail::WebViewLauncher PkgConfig::UTF8PROC
-  PRIVATE Mocktail::AuthRuntimeComposition Mocktail::LegacyJni
-          mocktail_linker mocktail_window)
-mocktail_apply_compile_options(mocktail_experience_runtime)
-add_library(Mocktail::ExperienceRuntime ALIAS mocktail_experience_runtime)
-
 add_library(mocktail_bionic_abi_exports STATIC
   src/compat/bionic_abi_exports.cc
   src/compat/http_client_spin_guard.cc)
@@ -255,7 +229,7 @@ add_library(mocktail_legacy_runtime STATIC
 target_include_directories(mocktail_legacy_runtime PRIVATE include src)
 target_link_libraries(mocktail_legacy_runtime PRIVATE
   Mocktail::LegacyJni mocktail_compat Mocktail::Runtime
-  Mocktail::InputRuntime Mocktail::ExperienceRuntime Mocktail::Services
+  Mocktail::InputRuntime
   mocktail_linker mocktail_bionic_abi_exports libc_shim
   mocktail_window mocktail_graphics_foundation
   ${MOCKTAIL_EXECINFO_LINK_LIBRARY})
