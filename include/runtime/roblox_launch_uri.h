@@ -31,7 +31,8 @@ struct RobloxLaunchRequest {
   std::string iso_context;
 };
 
-Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request);
+Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request,
+                             std::string* authentication_ticket = nullptr);
 
 }  // namespace mocktail::runtime
 
