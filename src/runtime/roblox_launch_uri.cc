@@ -366,15 +366,22 @@ Status ParseClassic(std::string_view payload, LaunchFields* fields) {
         if (ticket_seen)
           return Invalid("Roblox player launch repeats gameinfo");
         ticket_seen = true;
-        Status status =
-            PercentDecode(encoded_value, false, &fields->authentication_ticket);
+        std::string opaque_ticket;
+        Status status = PercentDecode(encoded_value, false, &opaque_ticket);
         if (!status.ok()) return status;
-        if (fields->authentication_ticket.empty())
-          return Invalid("Roblox authentication ticket is empty");
-        for (unsigned char byte : fields->authentication_ticket) {
+        if (opaque_ticket.empty())
+          return Invalid("Roblox launch gameinfo is empty");
+        for (unsigned char byte : opaque_ticket) {
           if (byte < 0x21 || byte == 0x7f)
-            return Invalid("Roblox authentication ticket contains invalid bytes");
+            return Invalid("Roblox launch gameinfo contains invalid bytes");
         }
+        // The current Cordial Android investigation treats gameinfo as an
+        // opaque one-use desktop credential; redemption by the Android client
+        // is not verified. Do not copy it into another credential or log it.
+        volatile char* sensitive = opaque_ticket.data();
+        for (std::size_t i = 0; i < opaque_ticket.size(); ++i)
+          sensitive[i] = '\0';
+        opaque_ticket.clear();
       } else if (key == "placelauncherurl") {
         if (launcher_url_seen)
           return Invalid("Roblox player launch repeats PlaceLauncher URL");
