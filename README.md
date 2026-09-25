@@ -1,80 +1,68 @@
 # Mocktail
 
-Minimal C++ Roblox Android compatibility runtime for Linux.
+Minimal Linux launcher/runtime for a prepared Roblox Android payload.
 
-The runtime does not download, locate, inspect, or require Roblox APKs. Supply the
-prepared Roblox native library and assets directory directly.
-
-## Payload
-
-```text
-libroblox.so
-assets/
-```
-
-APK files are not part of the runtime path.
+Provide `libroblox.so` and the Roblox assets directory yourself. Mocktail does
+not download or install the Roblox client.
 
 ## Launch
-
-The preferred launch path is the Roblox website. When the browser invokes the
-registered `roblox-player:` or `roblox:` scheme, Mocktail parses the launch
-request and carries the place/server selection into Roblox.
-
-The desktop `roblox-player:` `gameinfo` value is treated as an opaque
-one-use launch credential and is not copied, logged, or speculatively redeemed
-by Mocktail. The current Cordial Android-runtime investigation has not
-verified that the Android client accepts that ticket for authentication.
-
-Therefore `.ROBLOSECURITY` remains available as the explicit authentication
-fallback:
 
 ```sh
 ./build/mocktail \
   --libroblox_file ~/libroblox.so \
   --assets_dir ~/assets \
-  --ROBLOSECURITY '<your-cookie>'
+  --ROBLOSECURITY '<cookie>' \
+  --place-id 1818
 ```
 
-The cookie is kept in memory only for the process lifetime and is not persisted
-by Mocktail.
+For a specific server:
 
-Supported launch options:
+```sh
+./build/mocktail \
+  --libroblox_file ~/libroblox.so \
+  --assets_dir ~/assets \
+  --ROBLOSECURITY '<cookie>' \
+  --place-id 1818 \
+  --server-id '<server-id>'
+```
+
+Headless mode keeps the launcher alive and pumps Roblox main-thread work:
+
+```sh
+./build/mocktail \
+  --libroblox_file ~/libroblox.so \
+  --assets_dir ~/assets \
+  --ROBLOSECURITY '<cookie>' \
+  --place-id 1818 \
+  --headless
+```
+
+Supported options:
 
 ```text
---launch-uri <roblox-player-or-roblox-uri>
+--assets_dir <path>
+--libroblox_file <path>
+--ROBLOSECURITY <value>
 --place-id <id>
 --server-id <id>
 --headless
---ROBLOSECURITY <value>
 ```
 
-A Roblox URI may also be supplied as the single positional argument.
+A single positional `roblox:` or `roblox-player:` URI is also accepted. That
+is the browser-launch path; the installed desktop entry registers both schemes
+with the desktop environment.
 
-The desktop entry registers both `roblox:` and `roblox-player:` with the
-operating system, so normal Roblox website clicks can invoke Mocktail without
-copying a launch URL manually.
+Browser launch parsing follows the URI shapes used by Mocktail/Cordial. The
+desktop `gameinfo` ticket is treated as an opaque one-use credential and is
+not forwarded or logged. The `.ROBLOSECURITY` value is kept in process memory
+only.
 
 ## Build
-
-Mocktail vendors only project-specific compatibility components. JNI and
-Vulkan headers are taken from the host system.
-
-The host must provide compatible system packages for SDL3 (3.2 or newer),
-SDL3_ttf, Vulkan headers, EGL/GLES headers, OpenSSL, nlohmann-json, libelf,
-utf8proc, fontconfig, and JDK JNI headers.
-
-On Debian/Ubuntu, the JNI header package is normally supplied by:
-
-```sh
-sudo apt install default-jdk-headless
-```
-
-Then:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ```
 
-This repository intentionally contains no Roblox downloader, APK updater,
-embedded WebView, or embedded browser UI runtime.
+The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, nlohmann-json,
+libelf, utf8proc, fontconfig, and a C++17 toolchain.
