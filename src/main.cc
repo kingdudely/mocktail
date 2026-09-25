@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
   }
 
   mocktail::runtime::AuthRuntimeComposition composition =
-      mocktail::runtime::ComposeAuthRuntime(roblosecurity, identity);
+      mocktail::runtime::ComposeAuthRuntime(roblosecurity);
   mocktail::runtime::SecurelyClearString(&roblosecurity);
 
   if (!composition) {
