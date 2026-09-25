@@ -894,8 +894,8 @@ jobject EngineJavaCallbackObject() {
 
 void SetObjectFieldRaw(jobject obj, const char* field_name, jobject value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (pseudo_object && field_name) {
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (native_object && field_name) {
     if (value != nullptr) {
       auto it = g_jni_ref_counts.find(value);
       if (it != g_jni_ref_counts.end()) {
@@ -904,9 +904,9 @@ void SetObjectFieldRaw(jobject obj, const char* field_name, jobject value) {
         g_jni_ref_counts[value] = 2;
       }
     }
-    auto it = pseudo_object->object_fields.find(field_name);
-    jobject prev = (it != pseudo_object->object_fields.end()) ? it->second : nullptr;
-    pseudo_object->object_fields[field_name] = value;
+    auto it = native_object->object_fields.find(field_name);
+    jobject prev = (it != native_object->object_fields.end()) ? it->second : nullptr;
+    native_object->object_fields[field_name] = value;
     if (prev != nullptr) {
       ReleaseJniReference(prev);
     }
@@ -917,33 +917,33 @@ void SetStringFieldRaw(jobject obj, const char* field_name, const char* value);
 
 void SetIntFieldRaw(jobject obj, const char* field_name, jint value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (pseudo_object && field_name) {
-    pseudo_object->int_fields[field_name] = value;
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (native_object && field_name) {
+    native_object->int_fields[field_name] = value;
   }
 }
 
 void SetLongFieldRaw(jobject obj, const char* field_name, jlong value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (pseudo_object && field_name) {
-    pseudo_object->long_fields[field_name] = value;
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (native_object && field_name) {
+    native_object->long_fields[field_name] = value;
   }
 }
 
 void SetFloatFieldRaw(jobject obj, const char* field_name, jfloat value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (pseudo_object && field_name) {
-    pseudo_object->float_fields[field_name] = value;
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (native_object && field_name) {
+    native_object->float_fields[field_name] = value;
   }
 }
 
 void SetBooleanFieldRaw(jobject obj, const char* field_name, jboolean value) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  NativeObject* pseudo_object = NativeObjectFromRef(obj);
-  if (pseudo_object && field_name) {
-    pseudo_object->boolean_fields[field_name] = value;
+  NativeObject* native_object = NativeObjectFromRef(obj);
+  if (native_object && field_name) {
+    native_object->boolean_fields[field_name] = value;
   }
 }
 
@@ -2237,9 +2237,9 @@ bool HandleRobloxCookieSetVoidMethodA(jobject obj, jmethodID method_id,
 
 jobject MakeFileObject(const char* path) {
   jobject file = MakeObjectForClass("java/io/File");
-  auto* pseudo_object = NativeObjectFromRef(file);
-  if (pseudo_object) {
-    pseudo_object->object_fields["path"] = MakeString(path);
+  auto* native_object = NativeObjectFromRef(file);
+  if (native_object) {
+    native_object->object_fields["path"] = MakeString(path);
   }
   return file;
 }
@@ -2291,41 +2291,41 @@ jobject MakePackageInfoObject() {
 jobject MakeDeviceStaticParamsObject() {
   jobject object =
       SingletonObject("com/roblox/engine/jni/model/DeviceStaticParams");
-  auto* pseudo_object = NativeObjectFromRef(object);
-  if (pseudo_object) {
+  auto* native_object = NativeObjectFromRef(object);
+  if (native_object) {
     const PlatformIdentity identity = CurrentPlatformIdentity();
-    pseudo_object->object_fields["osVersion"] = MakeString("Android 13");
-    pseudo_object->object_fields["deviceName"] =
+    native_object->object_fields["osVersion"] = MakeString("Android 13");
+    native_object->object_fields["deviceName"] =
         MakeString(identity.device_name.c_str());
     const char* app_version = std::getenv("MOCKTAIL_ROBLOX_VERSION");
-    pseudo_object->object_fields["appVersion"] =
+    native_object->object_fields["appVersion"] =
         MakeString(app_version != nullptr ? app_version : "unknown");
-    pseudo_object->object_fields["manufacturer"] =
+    native_object->object_fields["manufacturer"] =
         MakeString(identity.manufacturer.c_str());
-    pseudo_object->object_fields["model"] = MakeString(identity.model.c_str());
-    pseudo_object->object_fields["brand"] = MakeString(identity.brand.c_str());
-    pseudo_object->object_fields["device"] =
+    native_object->object_fields["model"] = MakeString(identity.model.c_str());
+    native_object->object_fields["brand"] = MakeString(identity.brand.c_str());
+    native_object->object_fields["device"] =
         MakeString(identity.device_code.c_str());
-    pseudo_object->object_fields["deviceSku"] =
+    native_object->object_fields["deviceSku"] =
         MakeString(identity.device_sku.c_str());
-    pseudo_object->object_fields["appBuildVariant"] = MakeString("headless");
-    pseudo_object->object_fields["socModel"] =
+    native_object->object_fields["appBuildVariant"] = MakeString("headless");
+    native_object->object_fields["socModel"] =
         MakeString(identity.soc_model.c_str());
-    pseudo_object->object_fields["soc_model"] =
+    native_object->object_fields["soc_model"] =
         MakeString(identity.soc_model.c_str());
-    pseudo_object->boolean_fields["cpu64Bit"] = JNI_TRUE;
+    native_object->boolean_fields["cpu64Bit"] = JNI_TRUE;
     const mocktail::runtime::DisplaySize host_display =
         mocktail::runtime::ParseDisplaySize(
             std::getenv(mocktail::runtime::kDisplaySizeEnvironment));
-    pseudo_object->int_fields["screenWidth"] = host_display.width;
-    pseudo_object->int_fields["screenHeight"] = host_display.height;
-    pseudo_object->int_fields["screenDensityDpi"] = 160;
-    pseudo_object->int_fields["apiVersion"] = 33;
-    pseudo_object->int_fields["sdkVersion"] = 33;
-    pseudo_object->float_fields["density"] = 1.0f;
-    pseudo_object->float_fields["scaledDensity"] = 1.0f;
-    pseudo_object->float_fields["xdpi"] = 160.0f;
-    pseudo_object->float_fields["ydpi"] = 160.0f;
+    native_object->int_fields["screenWidth"] = host_display.width;
+    native_object->int_fields["screenHeight"] = host_display.height;
+    native_object->int_fields["screenDensityDpi"] = 160;
+    native_object->int_fields["apiVersion"] = 33;
+    native_object->int_fields["sdkVersion"] = 33;
+    native_object->float_fields["density"] = 1.0f;
+    native_object->float_fields["scaledDensity"] = 1.0f;
+    native_object->float_fields["xdpi"] = 160.0f;
+    native_object->float_fields["ydpi"] = 160.0f;
   }
   return object;
 }
@@ -2895,52 +2895,52 @@ jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
 
 jobject ObjectFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !field_name) {
+  auto* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !field_name) {
     return nullptr;
   }
-  auto it = pseudo_object->object_fields.find(field_name);
-  return it == pseudo_object->object_fields.end() ? nullptr : it->second;
+  auto it = native_object->object_fields.find(field_name);
+  return it == native_object->object_fields.end() ? nullptr : it->second;
 }
 
 jint IntFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !field_name) {
+  auto* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !field_name) {
     return 0;
   }
-  auto it = pseudo_object->int_fields.find(field_name);
-  return it == pseudo_object->int_fields.end() ? 0 : it->second;
+  auto it = native_object->int_fields.find(field_name);
+  return it == native_object->int_fields.end() ? 0 : it->second;
 }
 
 jboolean BooleanFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !field_name) {
+  auto* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !field_name) {
     return JNI_FALSE;
   }
-  auto it = pseudo_object->boolean_fields.find(field_name);
-  return it == pseudo_object->boolean_fields.end() ? JNI_FALSE : it->second;
+  auto it = native_object->boolean_fields.find(field_name);
+  return it == native_object->boolean_fields.end() ? JNI_FALSE : it->second;
 }
 
 jlong LongFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !field_name) {
+  auto* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !field_name) {
     return 0;
   }
-  auto it = pseudo_object->long_fields.find(field_name);
-  return it == pseudo_object->long_fields.end() ? 0 : it->second;
+  auto it = native_object->long_fields.find(field_name);
+  return it == native_object->long_fields.end() ? 0 : it->second;
 }
 
 jfloat FloatFieldValue(jobject obj, const char* field_name) {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto* pseudo_object = NativeObjectFromRef(obj);
-  if (!pseudo_object || !field_name) {
+  auto* native_object = NativeObjectFromRef(obj);
+  if (!native_object || !field_name) {
     return 0.0f;
   }
-  auto it = pseudo_object->float_fields.find(field_name);
-  return it == pseudo_object->float_fields.end() ? 0.0f : it->second;
+  auto it = native_object->float_fields.find(field_name);
+  return it == native_object->float_fields.end() ? 0.0f : it->second;
 }
 
 jboolean BooleanResultForReceiverMethod(jobject obj, const char* name) {
@@ -6840,9 +6840,9 @@ void VM::InitJNIFunctionTables() {
   native_interface_.GetObjectClass =
       [](JNIEnv* /*env*/, jobject obj) -> jclass {
     Trace("GetObjectClass");
-    auto* pseudo_object = NativeObjectFromRef(obj);
-    if (pseudo_object) {
-      return StoreClass(pseudo_object->GetClass());
+    auto* native_object = NativeObjectFromRef(obj);
+    if (native_object) {
+      return StoreClass(native_object->GetClass());
     }
     return StoreClass(FallbackClassForName("java/lang/Object"));
   };
@@ -7482,9 +7482,9 @@ void VM::InitJNIFunctionTables() {
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID,
          jboolean val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = NativeObjectFromRef(obj);
-    if (pseudo_object && name) {
-      pseudo_object->boolean_fields[name] = val;
+    auto* native_object = NativeObjectFromRef(obj);
+    if (native_object && name) {
+      native_object->boolean_fields[name] = val;
     }
   };
   native_interface_.SetByteField =
@@ -7496,9 +7496,9 @@ void VM::InitJNIFunctionTables() {
   native_interface_.SetIntField =
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jint val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = NativeObjectFromRef(obj);
-    if (pseudo_object && name) {
-      pseudo_object->int_fields[name] = val;
+    auto* native_object = NativeObjectFromRef(obj);
+    if (native_object && name) {
+      native_object->int_fields[name] = val;
     }
   };
   native_interface_.SetLongField =
@@ -7508,9 +7508,9 @@ void VM::InitJNIFunctionTables() {
   native_interface_.SetFloatField =
       [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jfloat val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
-    auto* pseudo_object = NativeObjectFromRef(obj);
-    if (pseudo_object && name) {
-      pseudo_object->float_fields[name] = val;
+    auto* native_object = NativeObjectFromRef(obj);
+    if (native_object && name) {
+      native_object->float_fields[name] = val;
     }
   };
   native_interface_.SetDoubleField =
