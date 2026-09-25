@@ -2813,6 +2813,29 @@ jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
       (void)va_arg(args, jobject);
       return MakeFileObject(context->ExternalFilesDirectory());
     }
+    if (std::strcmp(name, "getApplicationContext") == 0) {
+      return SingletonObject("android/app/Application");
+    }
+    if (std::strcmp(name, "getBaseContext") == 0 ||
+        std::strcmp(name, "getContext") == 0) {
+      return SingletonObject("android/content/Context");
+    }
+    if (std::strcmp(name, "getAssets") == 0 ||
+        std::strcmp(name, "getAssetManager") == 0) {
+      return SingletonObject("android/content/res/AssetManager");
+    }
+    if (std::strcmp(name, "getResources") == 0) {
+      return SingletonObject("android/content/res/Resources");
+    }
+    if (std::strcmp(name, "getClassLoader") == 0) {
+      return SingletonObject("java/lang/ClassLoader");
+    }
+    if (std::strcmp(name, "getSharedPreferences") == 0) {
+      return SingletonObject("android/content/SharedPreferences");
+    }
+    if (std::strcmp(name, "getPackageManager") == 0) {
+      return SingletonObject("android/content/pm/PackageManager");
+    }
     if (std::strcmp(name, "getSystemService") == 0) {
       jstring service = va_arg(args, jstring);
       switch (context->SystemService(StringFromJString(service))) {
