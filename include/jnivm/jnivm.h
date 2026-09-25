@@ -214,6 +214,7 @@ class VM final : public mocktail_libjnivm::VM {
   bool DispatchWebRtcAudioTrackStart(const void*);
   bool DispatchWebRtcAudioTrackStop(const void*);
   void DispatchWebRtcAudioTrackClose(const void*);
+  void DispatchWebRtcAudioTrackData(const void*, std::size_t);
 
   void SetAndroidWindowCallbacks(std::shared_ptr<void>,
                                  const AndroidWindowCallbacks&);
