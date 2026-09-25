@@ -50,17 +50,28 @@ std::filesystem::path ExecutableDirectory() {
   return std::filesystem::current_path();
 }
 
+std::filesystem::path ExpandUserPath(const std::string& value) {
+  if (value == "~" || value.rfind("~/", 0) == 0) {
+    const char* home = std::getenv("HOME");
+    if (home != nullptr && home[0] != '\0') {
+      if (value == "~") return std::filesystem::path(home);
+      return std::filesystem::path(home) / value.substr(2);
+    }
+  }
+  return std::filesystem::path(value);
+}
+
 bool SetPayloadEnvironment(
     const mocktail::runtime::CommandLineOptions& options) {
   const std::filesystem::path root = ExecutableDirectory();
   const std::filesystem::path library =
       options.roblox_library_path.empty()
           ? root / "libroblox.so"
-          : std::filesystem::path(options.roblox_library_path);
+          : ExpandUserPath(options.roblox_library_path);
   const std::filesystem::path assets =
       options.asset_path.empty()
           ? root / "assets"
-          : std::filesystem::path(options.asset_path);
+          : ExpandUserPath(options.asset_path);
 
   auto set_default = [](const char* name, const std::string& value) {
     return std::getenv(name) != nullptr ||
