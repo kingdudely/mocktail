@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Mocktail
-Comment=Linux Roblox native runtime
-Exec=mocktail %u
+Name=Roblox
+Comment=Roblox client powered by Mocktail
+Exec=roblox %u
 Terminal=false
 Type=Application
 Categories=Game;
