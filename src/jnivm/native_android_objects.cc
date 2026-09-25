@@ -54,7 +54,10 @@ std::unique_ptr<NativeObject> CreateNativeAndroidObject(
   if (klass == nullptr) return nullptr;
 
   const std::string& name = klass->GetName();
-  if (name == "android/content/Context") {
+  if (name == "android/content/Context" ||
+      name == "android/app/Application" ||
+      name == "android/app/Activity" ||
+      name == "com/roblox/client/startup/MainGameActivity") {
     return std::make_unique<AndroidContext>(klass);
   }
   if (name == "android/content/pm/PackageManager") {
