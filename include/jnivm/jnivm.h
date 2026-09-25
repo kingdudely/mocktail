@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -44,8 +43,6 @@ public:
   std::unordered_map<std::string, jfloat> float_fields;
   std::unordered_map<std::string, jboolean> boolean_fields;
 };
-
-using MethodCallback = std::function<void(JNIEnv *, jobject)>;
 
 // Resolved Roblox account identity supplied by the host runtime. This
 // intentionally contains no cookie or other authentication credential.
@@ -253,20 +250,9 @@ public:
 
   const std::string &GetName() const { return name_; }
 
-  void RegisterMethod(const std::string &method_name,
-                      const std::string &signature, MethodCallback callback);
-
-  const MethodCallback *FindMethod(const std::string &method_name,
-                                   const std::string &signature) const;
-
-  const std::unordered_map<std::string, MethodCallback> &GetMethods() const {
-    return methods_;
-  }
 
 private:
   std::string name_;
-
-  std::unordered_map<std::string, MethodCallback> methods_;
 };
 
 class VM {
