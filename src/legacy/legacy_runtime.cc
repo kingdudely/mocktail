@@ -61,19 +61,14 @@
 #include "runtime/device_memory_profile.h"
 #include "runtime/display_size.h"
 #include "runtime/environment.h"
-#include "runtime/jnivm_platform_web_callbacks.h"
 #include "runtime/owned_pthread.h"
 #include "runtime/roblox_app_lifecycle.h"
 #include "runtime/roblox_capability_resolver.h"
-#include "runtime/roblox_platform_web_symbols.h"
-#include "runtime/roblox_experience_composition.h"
 #include "runtime/roblox_game_session_native_adapter.h"
 #include "runtime/roblox_window_input_runtime.h"
 #include "runtime/roblox_text_input_jni_bridge.h"
 #include "runtime/runtime_config.h"
 #include "runtime/runtime_paths.h"
-#include "services/client_settings_service.h"
-#include "services/http_client.h"
 #include "window/window.h"
 #include "window/window_game_surface_bridge.h"
 
@@ -657,7 +652,7 @@ void ApplyRuntimeDefaults() {
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_INIT_THREAD", "0");
   SetEnvDefault("MOCKTAIL_APP_BRIDGE_INIT_THREAD_TIMEOUT_MS", "1500");
   SetEnvDefault("MOCKTAIL_CALL_REAL_APP_BRIDGE_START", "1");
-  SetEnvDefault("MOCKTAIL_START_GAME_WITH_PARAM", "0");
+  SetEnvDefault("MOCKTAIL_START_GAME_WITH_PARAM", "1");
   SetEnvDefault("MOCKTAIL_SET_APP_BRIDGE_NOTIFICATION_LISTENER", "1");
   // APK ASMA calls nativeAppBridgeV2StartAppWithParams synchronously before
   // driving post-start surface/Lua callbacks. Keep the worker path opt-in so
@@ -1200,108 +1195,6 @@ void ClearFreshGamePresentObserver(void* context) {
   if (context != nullptr) {
     static_cast<mocktail::window::ScopedPresentObserver*>(context)->Reset();
   }
-}
-
-jobject CreateExperienceRawCallback(
-    void* context, std::shared_ptr<void> callback_context,
-    void (*run)(void*, JNIEnv*, jstring)) {
-  if (context == nullptr || run == nullptr) {
-    return nullptr;
-  }
-  return static_cast<jnivm::VM*>(context)->CreateMessageBusRawCallback(
-      std::move(callback_context), jnivm::MessageBusRawCallbacks{run});
-}
-
-void ClearExperienceRawCallback(void* context, jobject callback) {
-  if (context != nullptr) {
-    static_cast<jnivm::VM*>(context)->ClearMessageBusRawCallback(callback);
-  }
-}
-
-jobject CreateMessageBusRequestHandler(void *context,
-                                       std::shared_ptr<void> callback_context,
-                                       std::string (*run)(void *, JNIEnv *,
-                                                          jstring)) {
-  if (context == nullptr || run == nullptr) {
-    return nullptr;
-  }
-  return static_cast<jnivm::VM *>(context)->CreateMessageBusRequestHandler(
-      std::move(callback_context),
-      jnivm::MessageBusRequestHandlerCallbacks{run});
-}
-
-void ClearMessageBusRequestHandler(void *context, jobject handler) {
-  if (context != nullptr) {
-    static_cast<jnivm::VM *>(context)->ClearMessageBusRequestHandler(handler);
-  }
-}
-
-jobject CreateBrowserServiceMemStorageCallback(
-    void *context, std::shared_ptr<void> callback_context,
-    void (*on_item_set)(void *, JNIEnv *, jstring)) {
-  if (context == nullptr || on_item_set == nullptr) {
-    return nullptr;
-  }
-  return static_cast<jnivm::VM *>(context)->CreateMemStorageCallback(
-      std::move(callback_context),
-      jnivm::MemStorageCallbackCallbacks{on_item_set});
-}
-
-void ClearBrowserServiceMemStorageCallback(void *context, jobject callback) {
-  if (context != nullptr) {
-    static_cast<jnivm::VM *>(context)->ClearMemStorageCallback(callback);
-  }
-}
-
-jobject CreateAsyncMessageBusRequestHandler(
-    void* context, std::shared_ptr<void> callback_context,
-    void (*run)(void*, JNIEnv*, jstring, jstring)) {
-  return context ? static_cast<jnivm::VM*>(context)
-                       ->CreateMessageBusAsyncRequestHandler(
-                           std::move(callback_context),
-                           jnivm::MessageBusAsyncRequestHandlerCallbacks{run})
-                 : nullptr;
-}
-
-void ClearAsyncMessageBusRequestHandler(void* context, jobject handler) {
-  if (context) {
-    static_cast<jnivm::VM*>(context)->ClearMessageBusAsyncRequestHandler(
-        handler);
-  }
-}
-
-struct ExperienceLifecycleTarget {
-  std::weak_ptr<mocktail::runtime::RobloxExperienceComposition> composition;
-};
-
-void NotifyLuaAppDidReturn(void* context) {
-  if (context == nullptr) {
-    return;
-  }
-  const std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
-      composition =
-          static_cast<ExperienceLifecycleTarget*>(context)->composition.lock();
-  if (composition != nullptr) {
-    composition->NotifyLuaAppDidReturn();
-  }
-}
-
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceCreated(
-    void* context, uint64_t generation) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
-      ->SurfaceCreated(generation);
-}
-
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceChanged(
-    void* context, mocktail::runtime::GameSurface surface) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
-      ->SurfaceChanged(std::move(surface));
-}
-
-mocktail::runtime::GameSessionUpdateResult ExperienceSurfaceDestroyed(
-    void* context, uint64_t generation) {
-  return static_cast<mocktail::runtime::RobloxExperienceComposition*>(context)
-      ->SurfaceDestroyed(generation);
 }
 
 std::string GetEnvStringDefaultPath(const char* name,
@@ -2186,71 +2079,9 @@ void ApplyAuthStartupDefaults(bool credential_available,
 }
 
 std::string ResolveClientSettingsJson() {
-  mocktail::services::ClientSettingsOptions options;
-  options.explicit_json =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON", "");
-  options.explicit_file =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_JSON_FILE", "");
-  options.use_bundled = IsEnabled("MOCKTAIL_USE_BUNDLED_CLIENT_SETTINGS");
-  options.sober_mode = IsEnabled("MOCKTAIL_SOBER_MODE");
-  options.fetch = IsEnabled("MOCKTAIL_FETCH_CLIENT_SETTINGS");
-  options.auto_update =
-      !IsDisabled("MOCKTAIL_CLIENT_SETTINGS_AUTO_UPDATE");
-  options.application =
-      GetEnvString("MOCKTAIL_CLIENT_SETTINGS_APP", "GoogleAndroidApp");
-  options.url = GetEnvString("MOCKTAIL_CLIENT_SETTINGS_URL", "");
-  options.cache_file = GetEnvString(
-      "MOCKTAIL_CLIENT_SETTINGS_CACHE_FILE",
-      (MocktailCacheRoot() + "/clientsettings/" + options.application +
-       ".json")
-          .c_str());
-
-  static mocktail::services::CurlHttpClient http_client;
-  static mocktail::services::ClientSettingsService settings_service(
-      http_client);
-  const mocktail::services::ClientSettingsResult result =
-      settings_service.Resolve(options);
-
-  using mocktail::services::ClientSettingsSource;
-  switch (result.source) {
-    case ClientSettingsSource::kExplicitJson:
-      break;
-    case ClientSettingsSource::kExplicitFile:
-      std::cout << "  [settings] using explicit client settings file "
-                << options.explicit_file << " bytes=" << result.json.size()
-                << '\n';
-      break;
-    case ClientSettingsSource::kBundledFile:
-      std::cout << "  [settings] using bundled client settings "
-                << options.bundled_file << " bytes=" << result.json.size()
-                << '\n';
-      break;
-    case ClientSettingsSource::kSafeDefaults:
-      std::cout << "  [settings] using safe inline client settings\n";
-      break;
-    case ClientSettingsSource::kDownloaded:
-      std::cout << "  [settings] flags "
-                << (result.cache_updated ? "updated" : "unchanged") << '\n';
-      break;
-    case ClientSettingsSource::kCache:
-      if (!result.error.empty()) {
-        std::cerr
-            << "  [settings] CDN fetch failed; using cached flags if present: "
-            << result.error << '\n';
-      }
-      std::cout << "  [settings] using cached flags\n";
-      break;
-    case ClientSettingsSource::kEmptyDefaults:
-      if (!result.error.empty()) {
-        std::cerr << "  [settings] CDN fetch failed: " << result.error << '\n';
-      }
-      std::cerr
-          << "  [settings] no client settings available; using empty defaults\n";
-      break;
-  }
-  std::cout << std::flush;
-  std::cerr << std::flush;
-  return result.json;
+  const char* override_json = std::getenv("MOCKTAIL_CLIENT_SETTINGS_JSON");
+  if (override_json != nullptr && override_json[0] != '\0') return override_json;
+  return R"json({"applicationSettings":{"BeginScheduledFlagFetch3":"False","BeginScheduledFlagFetch5":"false","RetryFlagPrefetchOnBackgroundFailure":"false","FFlagAndroidEnableQoS":"False","FFlagEnableNetworkStatusObserving":"False","FFlagEnableJNIAppbridgeStartMilestone":"False"}})json";
 }
 
 jstring NewClientSettingsString(JNIEnv* env) {
@@ -4485,11 +4316,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
       mocktail::runtime::RuntimeConfig::FromEnvironment(process_environment);
   const mocktail::runtime::InputCapabilityConfig& input_capabilities =
       runtime_config.input_capabilities();
-  if (!runtime_config.frame_rate().valid()) {
-    std::cerr << "[FATAL] Invalid MOCKTAIL_FRAME_RATE_LIMIT; expected "
-                 "-1, display, unlimited, or a positive integer\n";
-    return EXIT_FAILURE;
-  }
   if (!runtime_config.theme_mode_valid()) {
     std::cerr
         << "[FATAL] Invalid MOCKTAIL_THEME; expected roblox, system, light, "
@@ -4502,25 +4328,12 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
          input_capabilities.mouse_enabled ? "1" : "0", 1);
   setenv("MOCKTAIL_KEYBOARD_ENABLED_INTERNAL",
          input_capabilities.keyboard_enabled ? "1" : "0", 1);
-  if (runtime_config.has_unsafe_detached_thread_overrides()) {
-    std::cerr << "[FATAL] Unsupported detached legacy thread overrides:\n";
-    for (const std::string& name :
-         runtime_config.unsafe_detached_thread_overrides()) {
-      std::cerr << "  - " << name << '\n';
-    }
-    std::cerr << "  Supported runtime requires synchronous or owned worker "
-                 "execution.\n";
-    return EXIT_FAILURE;
-  }
   const runtime::ScopedRobloxCredentialBinding credential_binding(
       dependencies.jni_vm().get(), dependencies.roblox_credential());
   if (!credential_binding.bound()) {
     std::cerr << "[FATAL] Typed Pseudo-JVM credential provider is missing\n";
     return EXIT_FAILURE;
   }
-  const std::string library_path =
-      runtime_config.roblox_library_path().string();
-
   const std::string library_path =
       runtime_config.roblox_library_path().string();
 
@@ -5793,11 +5606,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   }
   std::unique_ptr<mocktail::runtime::RobloxGameSessionRuntime>
       game_session_runtime;
-  std::unique_ptr<mocktail::runtime::RobloxGameSessionSymbols>
-      experience_game_symbols;
-  std::shared_ptr<mocktail::runtime::RobloxExperienceComposition>
-      experience_composition;
-  std::shared_ptr<ExperienceLifecycleTarget> experience_lifecycle_target;
   std::shared_ptr<mocktail::runtime::RobloxWindowInputRuntime>
       window_input_runtime;
   std::unique_ptr<mocktail::runtime::RobloxTextInputJniBridge>
@@ -5843,30 +5651,21 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         }
         return EXIT_FAILURE;
       }
-      if (IsEnabled("MOCKTAIL_START_GAME_WITH_PARAM")) {
-        mocktail::runtime::JniEnvironmentProvider environment{
-            raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
-        mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
-        surface_config.asset_folder_path = DefaultAssetPath();
-        surface_config.dpi_scale =
-            mocktail::window::GetWindowViewportSnapshot().dpi_scale;
-        surface_config.is_touch_device = input_capabilities.touch_enabled;
-        surface_config.is_mouse_device = input_capabilities.mouse_enabled;
-        surface_config.is_keyboard_device =
-            input_capabilities.keyboard_enabled;
-        game_session_runtime =
-            std::make_unique<mocktail::runtime::RobloxGameSessionRuntime>(
-                environment, *game_resolution.symbols(),
-                std::move(surface_config));
-        std::cout << "  [game-session] eager typed GAME symbols ready\n"
-                  << std::flush;
-      } else {
-        experience_game_symbols =
-            std::make_unique<mocktail::runtime::RobloxGameSessionSymbols>(
-                *game_resolution.symbols());
-        std::cout << "  [experience] dynamic GAME symbols ready\n"
-                  << std::flush;
-      }
+            mocktail::runtime::JniEnvironmentProvider environment{
+          raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
+      mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
+      surface_config.asset_folder_path = DefaultAssetPath();
+      surface_config.dpi_scale =
+          has_window ? mocktail::window::GetWindowViewportSnapshot().dpi_scale : 1.0f;
+      surface_config.is_touch_device = input_capabilities.touch_enabled;
+      surface_config.is_mouse_device = input_capabilities.mouse_enabled;
+      surface_config.is_keyboard_device = input_capabilities.keyboard_enabled;
+      game_session_runtime =
+          std::make_unique<mocktail::runtime::RobloxGameSessionRuntime>(
+              environment, *game_resolution.symbols(),
+              std::move(surface_config));
+      std::cout << "  [game-session] typed GAME symbols ready\n"
+                << std::flush;
     }
 
     NativeGameGlobalInitFn native_global_init =
@@ -6456,77 +6255,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               << " run_start_app_with_params="
               << (run_start_app_with_params ? 1 : 0) << '\n' << std::flush;
 
-    if (experience_game_symbols != nullptr) {
-      mocktail::runtime::RobloxExperienceMessageBusSymbols message_bus_symbols;
-      message_bus_symbols.get_launch_id =
-          reinterpret_cast<mocktail::runtime::GetExperienceLaunchIdFn>(
-              linker::ResolveSymbol(roblox_handle,
-                                    "Java_com_roblox_universalapp_experience_"
-                                    "JNIExperienceProtocol_getLaunchId"));
-      message_bus_symbols.subscribe_raw =
-          reinterpret_cast<mocktail::runtime::SubscribeExperienceLaunchRawFn>(
-              linker::ResolveSymbol(
-                  roblox_handle,
-                  "Java_com_roblox_universalapp_messagebus_MessageBus_"
-                  "doSubscribeRaw"));
-      message_bus_symbols.delete_connection =
-          reinterpret_cast<mocktail::runtime::DeleteMessageBusConnectionFn>(
-              linker::ResolveSymbol(
-                  roblox_handle,
-                  "Java_com_roblox_universalapp_messagebus_Connection_"
-                  "deleteSharedPtr"));
-      const mocktail::runtime::RobloxPlatformWebSymbols platform_web_symbols =
-          mocktail::runtime::ResolveRobloxPlatformWebSymbols(
-              roblox_handle, message_bus_symbols.subscribe_raw,
-              message_bus_symbols.delete_connection);
-      mocktail::runtime::RobloxExperienceJniFactory jni_factory{
-          jni_vm.get(),
-          &CreateExperienceRawCallback,
-          &ClearExperienceRawCallback,
-          &CreateMessageBusRequestHandler,
-          &ClearMessageBusRequestHandler,
-          &CreateBrowserServiceMemStorageCallback,
-          &ClearBrowserServiceMemStorageCallback,
-          &mocktail::runtime::SetJnivmPlatformWebCallbacks,
-          &mocktail::runtime::ClearJnivmPlatformWebCallbacks,
-          &CreateAsyncMessageBusRequestHandler,
-          &ClearAsyncMessageBusRequestHandler};
-      mocktail::runtime::RobloxFreshLaunchPresentBoundary present_boundary{
-          &game_present_observer, &RegisterFreshGamePresentObserver,
-          &ClearFreshGamePresentObserver};
-      mocktail::runtime::RobloxGameSurfaceJniConfig surface_config;
-      surface_config.asset_folder_path = DefaultAssetPath();
-      surface_config.dpi_scale =
-          mocktail::window::GetWindowViewportSnapshot().dpi_scale;
-      surface_config.is_touch_device = input_capabilities.touch_enabled;
-      surface_config.is_mouse_device = input_capabilities.mouse_enabled;
-      surface_config.is_keyboard_device = input_capabilities.keyboard_enabled;
-      mocktail::runtime::JniEnvironmentProvider environment{
-          raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
-      experience_composition =
-          std::make_shared<mocktail::runtime::RobloxExperienceComposition>(
-              environment, message_bus_symbols, platform_web_symbols.web_view,
-              platform_web_symbols.browser_service,
-              platform_web_symbols.permissions, *experience_game_symbols,
-              jni_factory, present_boundary, std::move(surface_config),
-              &dependencies.roblox_credential(),
-              mocktail::runtime::RobloxExperienceSurfaceProvider{},
-              discord_rpc.observer(),
-              dependencies.clear_persisted_web_view_cookie(),
-              runtime_config.microphone_enabled());
-      const mocktail::Status platform_protocol_status =
-          experience_composition->InitializePlatformProtocols();
-      if (!platform_protocol_status.ok()) {
-        std::cerr << "[FATAL] Roblox platform protocols did not initialize: "
-                  << platform_protocol_status.message() << '\n';
-        return EXIT_FAILURE;
-      }
-      std::cout
-          << "  [platform] WebView, BrowserService and Permissions protocols "
-             "initialized before native bootstrap\n"
-          << std::flush;
-    }
-
+    
     EngineStartupContext startup_context_value = {
         jni_vm.get(),
         raw_vm,
@@ -6701,41 +6430,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                 << game_session_runtime->startup_status().message() << '\n';
       return EXIT_FAILURE;
     }
-    if (experience_composition != nullptr &&
-        dependencies.account_identity().user_id > 0) {
-      const mocktail::window::WindowSurfaceSnapshot window_surface =
-          mocktail::window::GetWindowSurfaceSnapshot();
-      mocktail::runtime::RobloxLuaAppExperienceReadiness readiness;
-      readiness.principal.kind =
-          mocktail::runtime::GameSessionPrincipalKind::kAuthenticated;
-      readiness.principal.generation = 1;
-      readiness.principal.principal_id =
-          std::to_string(dependencies.account_identity().user_id);
-      readiness.principal.base_url = "https://www.roblox.com/";
-      readiness.surface = {window_surface.generation,
-                           window_surface.native_window, window_surface.width,
-                           window_surface.height, window_surface.dpi_scale};
-      readiness.username = dependencies.account_identity().username;
-      const mocktail::Status experience_status =
-          experience_composition->OnLuaAppReady(std::move(readiness));
-      if (!experience_status.ok()) {
-        std::cerr << "[FATAL] Dynamic ExperienceProtocol did not initialize: "
-                  << experience_status.message() << '\n';
-        return EXIT_FAILURE;
-      }
-      experience_lifecycle_target = std::make_shared<ExperienceLifecycleTarget>(
-          ExperienceLifecycleTarget{experience_composition});
-      jni_vm->SetRobloxExperienceLifecycleCallbacks(
-          experience_lifecycle_target,
-          jnivm::RobloxExperienceLifecycleCallbacks{&NotifyLuaAppDidReturn});
-      std::cout << "  [experience] subscribed to dynamic launch requests\n"
-                << std::flush;
-    } else if (experience_composition != nullptr) {
-      std::cout << "  [experience] dynamic launch subscription awaits an "
-                   "authenticated identity\n"
-                << std::flush;
-    }
-    if (mocktail::window::IsInitialised()) {
+     else     if (mocktail::window::IsInitialised()) {
       mocktail::runtime::JniEnvironmentProvider input_environment{
           raw_vm, jni_vm.get(), &RestoreGameSessionJniEnvironment};
       window_input_runtime =
@@ -6780,18 +6475,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
               mocktail::window::MakeWindowGameSurfaceConsumer(
                   game_session_runtime.get()),
               mocktail::window::MakeWindowResizeReadinessCommitObserver());
-    } else if (experience_composition != nullptr &&
-               experience_composition->subscribed()) {
-      mocktail::window::WindowGameSurfaceConsumer experience_consumer{
-          experience_composition.get(), &ExperienceSurfaceCreated,
-          &ExperienceSurfaceChanged, &ExperienceSurfaceDestroyed};
-      surface_bridge =
-          std::make_unique<mocktail::window::WindowGameSurfaceBridge>(
-              mocktail::window::MakeWindowGameSurfaceEventSource(),
-              experience_consumer,
-              mocktail::window::MakeWindowResizeReadinessCommitObserver());
-    }
-    const auto drain_game_surface_events = [&]() {
+    } else     const auto drain_game_surface_events = [&]() {
       if (surface_bridge == nullptr) {
         return true;
       }
@@ -6859,32 +6543,11 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
         std::cout << "  [main] delayed nativeAppBridgeStartLuaAppDM returned\n"
                   << std::flush;
       }
-      if (experience_composition != nullptr) {
-        const mocktail::Status platform_event_status =
-            experience_composition->DrainPlatformEvents();
-        if (!platform_event_status.ok()) {
-          std::cerr << "[FATAL] Roblox platform event delivery failed: "
-                    << platform_event_status.message() << '\n';
-          game_surface_events_completed = false;
-          break;
-        }
-      }
-      const uint64_t fps_after_platform_ns =
+            const uint64_t fps_after_platform_ns =
           fps_trace ? MonotonicNanos() : 0;
       PumpRobloxMainThreadMessagesOnce();
       const uint64_t fps_after_engine_ns = fps_trace ? MonotonicNanos() : 0;
-      if (experience_composition != nullptr &&
-          experience_composition->subscribed()) {
-        const mocktail::Status launch_status =
-            experience_composition->DrainLaunchRequests();
-        if (!launch_status.ok()) {
-          std::cerr << "[FATAL] Dynamic experience launch failed: "
-                    << launch_status.message() << '\n';
-          game_surface_events_completed = false;
-          break;
-        }
-      }
-      const uint64_t fps_after_launch_ns = fps_trace ? MonotonicNanos() : 0;
+            const uint64_t fps_after_launch_ns = fps_trace ? MonotonicNanos() : 0;
       const uint64_t fps_pace_ns = mocktail::window::PaceInputPump();
       if (fps_trace) {
         const uint64_t fps_tick_end_ns = MonotonicNanos();
@@ -6935,25 +6598,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                                  input_shutdown_completed;
     }
     bool experience_destroyed_app = false;
-    if (experience_composition != nullptr) {
-      jni_vm->ClearRobloxExperienceLifecycleCallbacks();
-      experience_lifecycle_target.reset();
-      const mocktail::runtime::GameSessionSnapshot snapshot =
-          experience_composition->Snapshot();
-      experience_destroyed_app =
-          snapshot.game_running || snapshot.game_paused ||
-          snapshot.game_present_pending;
-      const mocktail::Status experience_shutdown =
-          experience_composition->Shutdown();
-      if (experience_destroyed_app) {
-        lifecycle_shutdown_completed = experience_shutdown.ok();
-      }
-      if (!experience_shutdown.ok()) {
-        std::cerr << "  [main] ExperienceProtocol shutdown failed: "
-                  << experience_shutdown.message() << '\n';
-      }
-    }
-    if (game_session_runtime != nullptr) {
+        if (game_session_runtime != nullptr) {
       const mocktail::runtime::GameSessionUpdateResult shutdown_result =
           game_session_runtime->Shutdown();
       lifecycle_shutdown_completed =
@@ -6964,7 +6609,7 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
                 << " (" << shutdown_result.message << ")\n"
                 << std::flush;
       game_present_observer.Reset();
-    } else if (!experience_destroyed_app) {
+    } else {
       const mocktail::runtime::RobloxSymbolLookup lifecycle_lookup(
           &ResolveRobloxCapabilitySymbol, &roblox_handle);
       const mocktail::runtime::RobloxAppLifecycleResolution
