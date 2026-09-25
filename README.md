@@ -12,6 +12,15 @@ libroblox.so
 assets/
 ```
 
+## JNI architecture
+
+Mocktail does not run a Java VM. The JNI ABI is implemented by native C++ objects,
+so a JNI object handle can resolve directly to a C++ class instance. The
+framework is being migrated class-by-class using Cordial's documented Roblox
+JNI surface; unconverted classes retain the generic compatibility fallback.
+
+The first typed framework objects are Context, Application, Activity,
+MainGameActivity, and PackageManager.
 ## Launching from Roblox
 
 The normal path is simply pressing **Play** on roblox.com.
