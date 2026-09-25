@@ -38,9 +38,14 @@ AndroidSystemService AndroidContext::SystemService(
 AndroidPackageManager::AndroidPackageManager(std::shared_ptr<Class> klass)
     : NativeObject(std::move(klass)) {}
 
-bool AndroidPackageManager::HasSystemFeature(std::string_view name) const
+bool AndroidPackageManager::HasSystemFeature(std::string_view name,
+                                             bool pc_hardware,
+                                             bool touch_enabled) const
     noexcept {
-  if (name == "android.hardware.type.pc") return true;
+  if (name == "android.hardware.type.pc") return pc_hardware;
+  if (name.rfind("android.hardware.touchscreen", 0) == 0) {
+    return touch_enabled;
+  }
   return false;
 }
 
