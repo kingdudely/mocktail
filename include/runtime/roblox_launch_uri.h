@@ -29,7 +29,6 @@ struct RobloxLaunchRequest {
   std::string join_attempt_id;
   std::string join_attempt_origin;
   std::string iso_context;
-  std::string authentication_ticket;
 };
 
 Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request);
