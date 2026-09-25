@@ -76,7 +76,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(linker PRIVATE -w)
 endif()
 
-find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 
@@ -123,13 +123,12 @@ mocktail_apply_compile_options(mocktail_runtime)
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
 
 add_library(mocktail_auth_runtime_composition STATIC
-  src/runtime/auth_runtime_composition.cc
-  src/runtime/roblox_auth_transport.cc)
+  src/runtime/auth_runtime_composition.cc)
 target_include_directories(mocktail_auth_runtime_composition PUBLIC include)
 target_link_libraries(mocktail_auth_runtime_composition PUBLIC
   Mocktail::LegacyJni Mocktail::Runtime)
 target_link_libraries(mocktail_auth_runtime_composition PRIVATE
-  OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
+  OpenSSL::Crypto)
 mocktail_apply_compile_options(mocktail_auth_runtime_composition)
 add_library(Mocktail::AuthRuntimeComposition ALIAS
   mocktail_auth_runtime_composition)
