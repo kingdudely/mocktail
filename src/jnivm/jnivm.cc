@@ -28,23 +28,6 @@
 
 namespace jnivm {
 
-void Class::RegisterMethod(const std::string& method_name,
-                           const std::string& signature,
-                           MethodCallback callback) {
-  const std::string key = method_name + ":" + signature;
-  methods_[key] = std::move(callback);
-}
-
-const MethodCallback* Class::FindMethod(const std::string& method_name,
-                                        const std::string& signature) const {
-  const std::string key = method_name + ":" + signature;
-  auto it = methods_.find(key);
-  if (it == methods_.end()) {
-    return nullptr;
-  }
-  return &it->second;
-}
-
 extern void* my_segment[100000];
 extern int g_jni_ref_index;
 
