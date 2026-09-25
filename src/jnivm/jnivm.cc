@@ -441,6 +441,23 @@ enum class JniMethodTag : uint16_t {
   kShowKeyboard,
   kHideKeyboard,
   kSetKeyboardText,
+
+  // Direct native C++ framework methods.
+  kContextGetPackageName,
+  kContextGetFilesDir,
+  kContextGetCacheDir,
+  kContextGetExternalFilesDir,
+  kContextGetApplicationContext,
+  kContextGetBaseContext,
+  kContextGetContext,
+  kContextGetAssets,
+  kContextGetAssetManager,
+  kContextGetResources,
+  kContextGetClassLoader,
+  kContextGetSharedPreferences,
+  kContextGetPackageManager,
+  kContextGetSystemService,
+  kPackageManagerHasSystemFeature,
 };
 
 inline JniMethodTag ResolveMethodTag(const char* name, const char* sig) {
@@ -469,6 +486,23 @@ inline JniMethodTag ResolveMethodTag(const char* name, const char* sig) {
   if (std::strcmp(name, "gameActivity_showKeyboard") == 0) return JniMethodTag::kShowKeyboard;
   if (std::strcmp(name, "gameActivity_hideKeyboard") == 0) return JniMethodTag::kHideKeyboard;
   if (std::strcmp(name, "gameActivity_setKeyboardText") == 0) return JniMethodTag::kSetKeyboardText;
+
+  if (std::strcmp(name, "getPackageName") == 0) return JniMethodTag::kContextGetPackageName;
+  if (std::strcmp(name, "getFilesDir") == 0) return JniMethodTag::kContextGetFilesDir;
+  if (std::strcmp(name, "getCacheDir") == 0) return JniMethodTag::kContextGetCacheDir;
+  if (std::strcmp(name, "getExternalFilesDir") == 0) return JniMethodTag::kContextGetExternalFilesDir;
+  if (std::strcmp(name, "getApplicationContext") == 0) return JniMethodTag::kContextGetApplicationContext;
+  if (std::strcmp(name, "getBaseContext") == 0) return JniMethodTag::kContextGetBaseContext;
+  if (std::strcmp(name, "getContext") == 0) return JniMethodTag::kContextGetContext;
+  if (std::strcmp(name, "getAssets") == 0) return JniMethodTag::kContextGetAssets;
+  if (std::strcmp(name, "getAssetManager") == 0) return JniMethodTag::kContextGetAssetManager;
+  if (std::strcmp(name, "getResources") == 0) return JniMethodTag::kContextGetResources;
+  if (std::strcmp(name, "getClassLoader") == 0) return JniMethodTag::kContextGetClassLoader;
+  if (std::strcmp(name, "getSharedPreferences") == 0) return JniMethodTag::kContextGetSharedPreferences;
+  if (std::strcmp(name, "getPackageManager") == 0) return JniMethodTag::kContextGetPackageManager;
+  if (std::strcmp(name, "getSystemService") == 0) return JniMethodTag::kContextGetSystemService;
+  if (std::strcmp(name, "hasSystemFeature") == 0) return JniMethodTag::kPackageManagerHasSystemFeature;
+
   return JniMethodTag::kUnknown;
 }
 
@@ -494,6 +528,13 @@ const char* MethodSignature(jmethodID method_id) {
   }
   const auto* desc = reinterpret_cast<const JniMethodDescriptor*>(method_id);
   return desc->signature != nullptr ? desc->signature : "";
+}
+
+JniMethodTag MethodTag(jmethodID method_id) {
+  if (__builtin_expect(method_id == nullptr, 0)) {
+    return JniMethodTag::kUnknown;
+  }
+  return reinterpret_cast<const JniMethodDescriptor*>(method_id)->tag;
 }
 
 jmethodID StoreMethodId(const char* name, const char* sig) {
@@ -2800,64 +2841,57 @@ jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
   // compatibility dispatch below remains as a fallback while classes are
   // migrated one at a time.
   if (AndroidContext* context = AndroidContextFromRef(obj)) {
-    if (std::strcmp(name, "getPackageName") == 0) {
-      return MakeString(context->PackageName());
-    }
-    if (std::strcmp(name, "getFilesDir") == 0) {
-      return MakeFileObject(context->FilesDirectory());
-    }
-    if (std::strcmp(name, "getCacheDir") == 0) {
-      return MakeFileObject(context->CacheDirectory());
-    }
-    if (std::strcmp(name, "getExternalFilesDir") == 0) {
-      (void)va_arg(args, jobject);
-      return MakeFileObject(context->ExternalFilesDirectory());
-    }
-    if (std::strcmp(name, "getApplicationContext") == 0) {
-      return SingletonObject("android/app/Application");
-    }
-    if (std::strcmp(name, "getBaseContext") == 0 ||
-        std::strcmp(name, "getContext") == 0) {
-      return SingletonObject("android/content/Context");
-    }
-    if (std::strcmp(name, "getAssets") == 0 ||
-        std::strcmp(name, "getAssetManager") == 0) {
-      return SingletonObject("android/content/res/AssetManager");
-    }
-    if (std::strcmp(name, "getResources") == 0) {
-      return SingletonObject("android/content/res/Resources");
-    }
-    if (std::strcmp(name, "getClassLoader") == 0) {
-      return SingletonObject("java/lang/ClassLoader");
-    }
-    if (std::strcmp(name, "getSharedPreferences") == 0) {
-      return SingletonObject("android/content/SharedPreferences");
-    }
-    if (std::strcmp(name, "getPackageManager") == 0) {
-      return SingletonObject("android/content/pm/PackageManager");
-    }
-    if (std::strcmp(name, "getSystemService") == 0) {
-      jstring service = va_arg(args, jstring);
-      switch (context->SystemService(StringFromJString(service))) {
-        case AndroidSystemService::kWindow:
-          return SingletonObject("android/view/WindowManager");
-        case AndroidSystemService::kDisplay:
-          return SingletonObject("android/hardware/display/DisplayManager");
-        case AndroidSystemService::kAudio:
-          return SingletonObject("android/media/AudioManager");
-        case AndroidSystemService::kInputMethod:
-          return SingletonObject(
-              "android/view/inputmethod/InputMethodManager");
-        case AndroidSystemService::kSensor:
-          return SingletonObject("android/hardware/SensorManager");
-        case AndroidSystemService::kConnectivity:
-          return SingletonObject("android/net/ConnectivityManager");
-        case AndroidSystemService::kPower:
-          return SingletonObject("android/os/PowerManager");
-        case AndroidSystemService::kUnknown:
-          break;
+    switch (MethodTag(method_id)) {
+      case JniMethodTag::kContextGetPackageName:
+        return MakeString(context->PackageName());
+      case JniMethodTag::kContextGetFilesDir:
+        return MakeFileObject(context->FilesDirectory());
+      case JniMethodTag::kContextGetCacheDir:
+        return MakeFileObject(context->CacheDirectory());
+      case JniMethodTag::kContextGetExternalFilesDir:
+        (void)va_arg(args, jobject);
+        return MakeFileObject(context->ExternalFilesDirectory());
+      case JniMethodTag::kContextGetApplicationContext:
+        return SingletonObject("android/app/Application");
+      case JniMethodTag::kContextGetBaseContext:
+      case JniMethodTag::kContextGetContext:
+        return SingletonObject("android/content/Context");
+      case JniMethodTag::kContextGetAssets:
+      case JniMethodTag::kContextGetAssetManager:
+        return SingletonObject("android/content/res/AssetManager");
+      case JniMethodTag::kContextGetResources:
+        return SingletonObject("android/content/res/Resources");
+      case JniMethodTag::kContextGetClassLoader:
+        return SingletonObject("java/lang/ClassLoader");
+      case JniMethodTag::kContextGetSharedPreferences:
+        return SingletonObject("android/content/SharedPreferences");
+      case JniMethodTag::kContextGetPackageManager:
+        return SingletonObject("android/content/pm/PackageManager");
+      case JniMethodTag::kContextGetSystemService: {
+        jstring service = va_arg(args, jstring);
+        switch (context->SystemService(StringFromJString(service))) {
+          case AndroidSystemService::kWindow:
+            return SingletonObject("android/view/WindowManager");
+          case AndroidSystemService::kDisplay:
+            return SingletonObject("android/hardware/display/DisplayManager");
+          case AndroidSystemService::kAudio:
+            return SingletonObject("android/media/AudioManager");
+          case AndroidSystemService::kInputMethod:
+            return SingletonObject(
+                "android/view/inputmethod/InputMethodManager");
+          case AndroidSystemService::kSensor:
+            return SingletonObject("android/hardware/SensorManager");
+          case AndroidSystemService::kConnectivity:
+            return SingletonObject("android/net/ConnectivityManager");
+          case AndroidSystemService::kPower:
+            return SingletonObject("android/os/PowerManager");
+          case AndroidSystemService::kUnknown:
+            break;
+        }
+        return SingletonObject("java/lang/Object");
       }
-      return SingletonObject("java/lang/Object");
+      default:
+        break;
     }
   }
   if (IsJavaStringGetBytesMethod(obj, method_id)) {
@@ -3004,7 +3038,7 @@ bool PackageManagerBooleanResultForMethodV(jobject obj, jmethodID method_id,
                                            va_list args, jboolean* result) {
   if (result == nullptr ||
       ObjectClassName(obj) != "android/content/pm/PackageManager" ||
-      std::strcmp(MethodName(method_id), "hasSystemFeature") != 0) {
+      MethodTag(method_id) != JniMethodTag::kPackageManagerHasSystemFeature) {
     return false;
   }
   const jstring feature = va_arg(args, jstring);
