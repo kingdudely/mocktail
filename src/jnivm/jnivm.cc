@@ -243,9 +243,6 @@ struct PseudoStringObject : NativeObject {
   std::string modified_utf8;
 };
 
-using jnivm::my_segment;
-using jnivm::g_jni_ref_index;
-
 static bool g_shutting_down_jnivm = false;
 
 struct JniVmShutdownHook {
@@ -257,10 +254,8 @@ static JniVmShutdownHook g_shutdown_hook;
 
 std::unordered_map<jobject, std::unique_ptr<Object>> g_object_storage;
 std::unordered_map<jobject, uint32_t> g_jni_ref_counts;
-constexpr uint32_t kJniSegmentCapacity = 100000;
-constexpr uint32_t kJniHandleShift = 16;
-std::shared_ptr<void> g_segment_owners[kJniSegmentCapacity];
 std::unordered_set<jclass> g_known_classes;
+std::unordered_map<jclass, std::shared_ptr<Class>> g_class_storage;
 std::unordered_map<std::string, jobject> g_singleton_objects;
 std::unordered_map<std::string, std::shared_ptr<Class>> g_fallback_classes;
 std::unordered_set<jstring> g_known_strings;
@@ -280,25 +275,6 @@ std::unordered_set<jlong> g_local_storage_users;
 jlong g_local_storage_current_user = kLocalStorageUninitializedUser;
 bool g_cookie_store_loaded = false;
 std::string g_cookie_header;
-
-enum class SegmentType : uint8_t {
-  kEmpty = 0,
-  kObject = 1,
-  kClass = 2,
-};
-
-static std::atomic<uint8_t> g_segment_types[kJniSegmentCapacity] = {};
-std::vector<int> g_free_slots;
-
-jobject JniHandleFromIndex(uint32_t index) {
-  return reinterpret_cast<jobject>(static_cast<uintptr_t>(index)
-                                   << kJniHandleShift);
-}
-
-uint32_t JniIndexFromHandle(jobject obj) {
-  return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(obj) >>
-                               kJniHandleShift);
-}
 
 void EnsureLocalFrame() {
   if (g_local_frames.empty()) {
@@ -340,26 +316,6 @@ void RetainJniReference(jobject obj) {
   } else {
     g_jni_ref_counts[obj] = 1;
   }
-}
-
-int AllocateSegmentSlot(void* value, std::shared_ptr<void> owner = nullptr,
-                        SegmentType type = SegmentType::kObject) {
-  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  int index = 0;
-  if (!g_free_slots.empty()) {
-    index = g_free_slots.back();
-    g_free_slots.pop_back();
-  } else if (g_jni_ref_index > 0 &&
-             static_cast<uint32_t>(g_jni_ref_index) < kJniSegmentCapacity) {
-    index = g_jni_ref_index++;
-  } else {
-    return 0;
-  }
-  my_segment[index] = value;
-  g_segment_owners[index] = std::move(owner);
-  g_segment_types[index].store(static_cast<uint8_t>(type),
-                               std::memory_order_release);
-  return index;
 }
 
 std::shared_ptr<Class> FallbackClassForName(const std::string& class_name) {
@@ -728,120 +684,70 @@ jlong StaticLongResultForMethod(jmethodID method_id) {
 }
 
 std::shared_ptr<Class> ClassFromJClass(jclass clazz) {
+  if (clazz == nullptr) return nullptr;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  if (!clazz) {
-    return nullptr;
-  }
-  const uint32_t index = JniIndexFromHandle(reinterpret_cast<jobject>(clazz));
-  Class* cls = nullptr;
-  if (index > 0 && index < kJniSegmentCapacity) {
-    cls = reinterpret_cast<Class*>(my_segment[index]);
-    if (g_segment_owners[index]) {
-      return std::static_pointer_cast<Class>(g_segment_owners[index]);
-    }
-  } else {
-    cls = reinterpret_cast<Class*>(clazz);
-  }
-  if (!cls) {
-    return nullptr;
-  }
-  return FallbackClassForName(cls->GetName());
+  auto owned = g_class_storage.find(clazz);
+  if (owned != g_class_storage.end()) return owned->second;
+  auto* raw = reinterpret_cast<Class*>(clazz);
+  return raw ? FallbackClassForName(raw->GetName()) : nullptr;
 }
 
-// g_segment_owners keeps the encoded class handle alive.
 static jclass StoreClass(std::shared_ptr<Class> cls) {
+  if (cls == nullptr) return nullptr;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  Class* raw_ptr = cls.get();
-  int index = AllocateSegmentSlot(raw_ptr, cls, SegmentType::kClass);
-  if (index <= 0) {
-    return nullptr;
-  }
-  jclass handle =
-      reinterpret_cast<jclass>(JniHandleFromIndex(static_cast<uint32_t>(index)));
+  jclass handle = reinterpret_cast<jclass>(cls.get());
+  g_class_storage.emplace(handle, std::move(cls));
   g_known_classes.insert(handle);
   return handle;
 }
 
+
 jobject StoreObject(std::unique_ptr<Object> object) {
+  if (object == nullptr) return nullptr;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  Object* raw_ptr = object.get();
-  int index = AllocateSegmentSlot(raw_ptr, nullptr, SegmentType::kObject);
-  if (index <= 0) {
-    return nullptr;
-  }
-  jobject handle = JniHandleFromIndex(static_cast<uint32_t>(index));
-  g_object_storage[handle] = std::move(object);
+  jobject handle = reinterpret_cast<jobject>(object.get());
+  g_object_storage.emplace(handle, std::move(object));
   g_jni_ref_counts[handle] = 1;
   RegisterLocalRef(handle);
   return handle;
 }
 
 void ReleaseJniReference(jobject obj) {
-  if (obj == nullptr || g_shutting_down_jnivm) {
-    return;
-  }
+  if (obj == nullptr || g_shutting_down_jnivm) return;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  if (g_shutting_down_jnivm) {
+  auto ref_it = g_jni_ref_counts.find(obj);
+  if (ref_it != g_jni_ref_counts.end() && ref_it->second > 1) {
+    --ref_it->second;
     return;
   }
-  auto ref_it = g_jni_ref_counts.find(obj);
-  if (ref_it != g_jni_ref_counts.end()) {
-    if (ref_it->second > 1) {
-      --ref_it->second;
-      return;
-    }
-    g_jni_ref_counts.erase(ref_it);
-  }
+  g_jni_ref_counts.erase(obj);
 
-  auto arr_it = g_array_storage.find(reinterpret_cast<jarray>(obj));
-  if (arr_it != g_array_storage.end()) {
-    std::unique_ptr<PseudoArray> dying_array = std::move(arr_it->second);
-    g_array_storage.erase(arr_it);
+  auto array = g_array_storage.find(reinterpret_cast<jarray>(obj));
+  if (array != g_array_storage.end()) {
+    g_array_storage.erase(array);
     return;
   }
   if (g_known_classes.find(reinterpret_cast<jclass>(obj)) !=
       g_known_classes.end()) {
     return;
   }
-  for (const auto& pair : g_singleton_objects) {
-    if (pair.second == obj) {
-      return;
-    }
-  }
-  const uint32_t index = JniIndexFromHandle(obj);
-  if (index > 0 && index < kJniSegmentCapacity) {
-    g_segment_types[index].store(static_cast<uint8_t>(SegmentType::kEmpty),
-                                 std::memory_order_release);
-    my_segment[index] = nullptr;
-    g_segment_owners[index].reset();
-    g_free_slots.push_back(static_cast<int>(index));
+  for (const auto& [_, singleton] : g_singleton_objects) {
+    if (singleton == obj) return;
   }
   g_known_strings.erase(reinterpret_cast<jstring>(obj));
-  std::unique_ptr<Object> dying_object;
-  auto obj_it = g_object_storage.find(obj);
-  if (obj_it != g_object_storage.end()) {
-    dying_object = std::move(obj_it->second);
-    g_object_storage.erase(obj_it);
-  }
+  g_object_storage.erase(obj);
 }
+
 
 
 NativeObject* NativeObjectFromRef(jobject obj) {
-  if (__builtin_expect(obj == nullptr, 0)) {
-    return nullptr;
-  }
-  const uint32_t index = JniIndexFromHandle(obj);
-  if (__builtin_expect(index > 0 && index < kJniSegmentCapacity, 1)) {
-    const uint8_t type = g_segment_types[index].load(std::memory_order_acquire);
-    if (__builtin_expect(type == static_cast<uint8_t>(SegmentType::kObject), 1)) {
-      void* raw_ptr = my_segment[index];
-      if (__builtin_expect(raw_ptr != nullptr, 1)) {
-        return static_cast<NativeObject*>(reinterpret_cast<Object*>(raw_ptr));
-      }
-    }
-  }
-  return nullptr;
+  if (obj == nullptr) return nullptr;
+  std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
+  auto it = g_object_storage.find(obj);
+  if (it == g_object_storage.end()) return nullptr;
+  return dynamic_cast<NativeObject*>(it->second.get());
 }
+
 
 AndroidContext* AndroidContextFromRef(jobject obj) {
   NativeObject* object = NativeObjectFromRef(obj);
@@ -4826,9 +4732,6 @@ jdouble JNICALL CallDoubleMethod(JNIEnv* /*env*/, jobject /*obj*/,
   return 0.0;
 }
 }  // namespace
-
-void* my_segment[100000] = { nullptr };
-int g_jni_ref_index = 1;
 
 jobject CreateAndroidConfiguration(JNIEnv* env) {
   if (env == nullptr) {
