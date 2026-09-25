@@ -295,6 +295,45 @@ void HookPackageManager(ENV* env, VM* vm) {
       });
 }
 
+void HookConfiguration(ENV* env) {
+  auto clazz = env->GetClass<AndroidConfiguration>(
+      "android/content/res/Configuration");
+  clazz->HookInstanceGetterFunction(env, "colorMode",
+      [](AndroidConfiguration* o) { return o->color_mode; });
+  clazz->HookInstanceGetterFunction(env, "densityDpi",
+      [](AndroidConfiguration* o) { return o->density_dpi; });
+  clazz->HookInstanceGetterFunction(env, "fontWeightAdjustment",
+      [](AndroidConfiguration* o) { return o->font_weight_adjustment; });
+  clazz->HookInstanceGetterFunction(env, "hardKeyboardHidden",
+      [](AndroidConfiguration* o) { return o->hard_keyboard_hidden; });
+  clazz->HookInstanceGetterFunction(env, "keyboard",
+      [](AndroidConfiguration* o) { return o->keyboard; });
+  clazz->HookInstanceGetterFunction(env, "keyboardHidden",
+      [](AndroidConfiguration* o) { return o->keyboard_hidden; });
+  clazz->HookInstanceGetterFunction(env, "mcc",
+      [](AndroidConfiguration* o) { return o->mcc; });
+  clazz->HookInstanceGetterFunction(env, "mnc",
+      [](AndroidConfiguration* o) { return o->mnc; });
+  clazz->HookInstanceGetterFunction(env, "navigation",
+      [](AndroidConfiguration* o) { return o->navigation; });
+  clazz->HookInstanceGetterFunction(env, "navigationHidden",
+      [](AndroidConfiguration* o) { return o->navigation_hidden; });
+  clazz->HookInstanceGetterFunction(env, "orientation",
+      [](AndroidConfiguration* o) { return o->orientation; });
+  clazz->HookInstanceGetterFunction(env, "screenHeightDp",
+      [](AndroidConfiguration* o) { return o->screen_height_dp; });
+  clazz->HookInstanceGetterFunction(env, "screenLayout",
+      [](AndroidConfiguration* o) { return o->screen_layout; });
+  clazz->HookInstanceGetterFunction(env, "screenWidthDp",
+      [](AndroidConfiguration* o) { return o->screen_width_dp; });
+  clazz->HookInstanceGetterFunction(env, "smallestScreenWidthDp",
+      [](AndroidConfiguration* o) { return o->smallest_screen_width_dp; });
+  clazz->HookInstanceGetterFunction(env, "touchscreen",
+      [](AndroidConfiguration* o) { return o->touchscreen; });
+  clazz->HookInstanceGetterFunction(env, "uiMode",
+      [](AndroidConfiguration* o) { return o->ui_mode; });
+}
+
 void HookTextBoxInfo(ENV* env) {
   auto clazz = env->GetClass<NativeTextBoxInfoObject>(
       "com/roblox/engine/jni/model/NativeTextBoxInfo");
@@ -469,7 +508,7 @@ void HookRobloxObjects(ENV* env, VM* vm) {
   env->GetClass<AndroidPackageManager>("android/content/pm/PackageManager");
   HookPackageManager(env, vm);
   HookFiles(env);
-  env->GetClass<AndroidConfiguration>("android/content/res/Configuration");
+  HookConfiguration(env);
   HookTextBoxInfo(env);
   env->GetClass<WebRtcAudioManagerObject>("org/webrtc/voiceengine/WebRtcAudioManager");
   env->GetClass<WebRtcAudioRecordObject>("org/webrtc/voiceengine/WebRtcAudioRecord");
@@ -889,4 +928,31 @@ void VM::InstallHooks() {
 }
 
 }  // namespace jnivm
+
+
+jobject CreateAndroidConfiguration(JNIEnv* env) {
+  if (env == nullptr) return nullptr;
+  auto* e = mocktail_libjnivm::ENV::FromJNIEnv(env);
+  auto config = std::make_shared<AndroidConfiguration>();
+  config->clazz = e->GetClass<AndroidConfiguration>(
+      "android/content/res/Configuration");
+
+  VM* vm = VmFromEnv(env);
+  const PlatformIdentity identity = Platform(vm);
+  const mocktail::runtime::DisplaySize size =
+      mocktail::runtime::ParseDisplaySize(
+          std::getenv(mocktail::runtime::kWindowSizeEnvironment));
+
+  config->hard_keyboard_hidden = identity.keyboard_enabled ? 1 : 2;
+  config->keyboard = identity.keyboard_enabled ? 2 : 1;
+  config->keyboard_hidden = identity.keyboard_enabled ? 1 : 2;
+  config->orientation = 2;
+  config->screen_height_dp = size.height;
+  config->screen_width_dp = size.width;
+  config->smallest_screen_width_dp = std::min(size.width, size.height);
+  config->touchscreen = identity.touch_enabled ? 3 : 1;
+
+  return mocktail_libjnivm::JNITypes<
+      std::shared_ptr<Object>>::ToJNIType(e, config);
+}
 
