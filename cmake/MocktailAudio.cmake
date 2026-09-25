@@ -7,7 +7,7 @@ get_filename_component(MOCKTAIL_AUDIO_ROOT
   "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE
 )
 
-# SDL 3.4 provides the callback needed for OpenSL buffer completion.
+# SDL 3.2 provides the callback surface used by the OpenSL bridge.
 find_package(SDL3 3.2 REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
