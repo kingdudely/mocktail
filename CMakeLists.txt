@@ -9,9 +9,9 @@ project(Mocktail
 include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
-# Mocktail implements its own pseudo-JVM. JNI is an API header surface here;
-# it does not link against a host JVM. Prefer vendored headers when present,
-# otherwise use the JNI headers provided by an installed JDK.
+# Mocktail implements the JNI ABI with native C++ objects. It does not run a
+# host JVM; the JNI headers are only the ABI/type definitions. Prefer vendored
+# headers when present, otherwise use the JNI headers from an installed JDK.
 set(MOCKTAIL_JNI_INCLUDE_DIR
   ${CMAKE_SOURCE_DIR}/third_party/jni/include)
 
