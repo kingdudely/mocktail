@@ -8,7 +8,7 @@ get_filename_component(MOCKTAIL_AUDIO_ROOT
 )
 
 # SDL 3.4 provides the callback needed for OpenSL buffer completion.
-find_package(SDL3 3.4 REQUIRED CONFIG)
+find_package(SDL3 3.2 REQUIRED CONFIG)
 find_package(Threads REQUIRED)
 
 add_library(mocktail_audio_core STATIC
