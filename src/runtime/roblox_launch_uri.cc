@@ -379,6 +379,11 @@ Status ParseClassic(std::string_view payload, LaunchFields* fields,
         }
         if (authentication_ticket != nullptr) {
           *authentication_ticket = std::move(opaque_ticket);
+        } else {
+          volatile char* sensitive = opaque_ticket.data();
+          for (std::size_t i = 0; i < opaque_ticket.size(); ++i) {
+            sensitive[i] = '\0';
+          }
         }
       } else if (key == "placelauncherurl") {
         if (launcher_url_seen)
