@@ -52,8 +52,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(linker PRIVATE -w)
 endif()
 
-set(VULKAN_HEADERS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-set(VULKAN_HEADERS_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -85,7 +83,6 @@ add_library(mocktail_runtime STATIC
   src/runtime/roblox_app_lifecycle.cc
   src/runtime/roblox_game_session_native_adapter.cc
   src/runtime/roblox_capability_resolver.cc
-  src/runtime/roblox_game_session_native_adapter.cc
   src/runtime/roblox_launch_uri.cc
   src/runtime/runtime_config.cc
   src/runtime/runtime_paths.cc
@@ -93,7 +90,7 @@ add_library(mocktail_runtime STATIC
 )
 target_include_directories(mocktail_runtime PUBLIC include ${JNI_INCLUDE_DIRS})
 target_include_directories(mocktail_runtime PRIVATE
-  src third_party/jni/include)
+  src)
 target_link_libraries(mocktail_runtime PUBLIC Threads::Threads)
 target_link_libraries(mocktail_runtime PRIVATE
   OpenSSL::Crypto nlohmann_json::nlohmann_json
@@ -102,7 +99,8 @@ mocktail_apply_compile_options(mocktail_runtime)
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
 
 add_library(mocktail_auth_runtime_composition STATIC
-  src/runtime/auth_runtime_composition.cc)
+  src/runtime/auth_runtime_composition.cc
+  src/runtime/roblox_auth_transport.cc)
 target_include_directories(mocktail_auth_runtime_composition PUBLIC include)
 target_link_libraries(mocktail_auth_runtime_composition PUBLIC
   Mocktail::LegacyJni Mocktail::Runtime)
