@@ -1,6 +1,5 @@
 #include "runtime/auth_runtime_composition.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -10,24 +9,16 @@ namespace mocktail::runtime {
 namespace {
 
 void ClearSensitiveString(std::string* value) {
-  if (value == nullptr) {
-    return;
-  }
+  if (value == nullptr) return;
   volatile char* bytes = value->empty() ? nullptr : value->data();
-  for (std::size_t i = 0; i < value->size(); ++i) {
-    bytes[i] = '\0';
-  }
+  for (std::size_t i = 0; i < value->size(); ++i) bytes[i] = '\0';
   value->clear();
 }
 
 std::string CanonicalCookieHeader(std::string_view value) {
-  if (value.empty()) {
-    return {};
-  }
+  if (value.empty()) return {};
   constexpr std::string_view prefix = ".ROBLOSECURITY=";
-  if (value.substr(0, prefix.size()) == prefix) {
-    return std::string(value);
-  }
+  if (value.substr(0, prefix.size()) == prefix) return std::string(value);
   std::string result(prefix);
   result.append(value);
   return result;
@@ -43,9 +34,7 @@ SecureRobloxCredential::SecureRobloxCredential(std::string canonical_header) {
   ClearSensitiveString(&canonical_header);
 }
 
-SecureRobloxCredential::~SecureRobloxCredential() {
-  Clear();
-}
+SecureRobloxCredential::~SecureRobloxCredential() { Clear(); }
 
 SecureRobloxCredential::SecureRobloxCredential(
     SecureRobloxCredential&& other) noexcept
@@ -62,43 +51,38 @@ SecureRobloxCredential& SecureRobloxCredential::operator=(
 
 void SecureRobloxCredential::Clear() {
   volatile char* bytes = bytes_.empty() ? nullptr : bytes_.data();
-  for (std::size_t i = 0; i < bytes_.size(); ++i) {
-    bytes[i] = '\0';
-  }
+  for (std::size_t i = 0; i < bytes_.size(); ++i) bytes[i] = '\0';
   bytes_.clear();
 }
 
-void SecurelyClearString(std::string* value) {
-  ClearSensitiveString(value);
-}
+void SecurelyClearString(std::string* value) { ClearSensitiveString(value); }
 
 ScopedRobloxCredentialBinding::ScopedRobloxCredentialBinding(
     jnivm::VM* jni_vm, const SecureRobloxCredential& credential)
     : jni_vm_(jni_vm) {
-  if (jni_vm_ != nullptr) {
+  if (jni_vm_ != nullptr)
     jni_vm_->SetRobloxCredentialProvider(&credential, &ProvideCredential);
-  }
 }
 
 ScopedRobloxCredentialBinding::~ScopedRobloxCredentialBinding() {
-  if (jni_vm_ != nullptr) {
-    jni_vm_->ClearRobloxCredentialProvider();
-  }
+  if (jni_vm_ != nullptr) jni_vm_->ClearRobloxCredentialProvider();
 }
 
 jnivm::RobloxCredentialView ScopedRobloxCredentialBinding::ProvideCredential(
     const void* context) {
   const auto* credential =
       static_cast<const SecureRobloxCredential*>(context);
-  if (credential == nullptr) {
-    return {};
-  }
+  if (credential == nullptr) return {};
   return {credential->c_str(), credential->size()};
 }
 
-AuthRuntimeComposition ComposeAuthRuntime(std::string_view roblosecurity) {
+AuthRuntimeComposition ComposeAuthRuntime(
+    std::string_view roblosecurity,
+    const jnivm::RobloxAuthIdentity& identity) {
   AuthRuntimeComposition result;
   result.jni_vm = std::make_shared<jnivm::VM>();
+  result.account_identity = identity;
+  result.jni_vm->SetRobloxAuthIdentity(identity);
 
   std::string canonical = CanonicalCookieHeader(roblosecurity);
   if (canonical.empty()) {
