@@ -317,7 +317,8 @@ Status ParsePlaceLauncherUrl(std::string_view url, LaunchFields* fields) {
   return ParseQuery(url.substr(path_end + 1), false, fields);
 }
 
-Status ParseClassic(std::string_view payload, LaunchFields* fields) {
+Status ParseClassic(std::string_view payload, LaunchFields* fields,
+                    std::string* authentication_ticket) {
   if (payload.empty() || fields == nullptr)
     return Invalid("Roblox player launch payload is missing");
 
@@ -368,19 +369,17 @@ Status ParseClassic(std::string_view payload, LaunchFields* fields) {
         std::string opaque_ticket;
         Status status = PercentDecode(encoded_value, false, &opaque_ticket);
         if (!status.ok()) return status;
-        if (opaque_ticket.empty())
-          return Invalid("Roblox launch gameinfo is empty");
+        if (opaque_ticket.empty() || opaque_ticket.size() > 2048)
+          return Invalid("Roblox launch gameinfo is empty or oversized");
         for (unsigned char byte : opaque_ticket) {
-          if (byte < 0x21 || byte == 0x7f)
+          if (!std::isalnum(byte) &&
+              byte != '-' && byte != '.' && byte != '_' && byte != '~') {
             return Invalid("Roblox launch gameinfo contains invalid bytes");
+          }
         }
-        // The current Cordial Android investigation treats gameinfo as an
-        // opaque one-use desktop credential; redemption by the Android client
-        // is not verified. Do not copy it into another credential or log it.
-        volatile char* sensitive = opaque_ticket.data();
-        for (std::size_t i = 0; i < opaque_ticket.size(); ++i)
-          sensitive[i] = '\0';
-        opaque_ticket.clear();
+        if (authentication_ticket != nullptr) {
+          *authentication_ticket = std::move(opaque_ticket);
+        }
       } else if (key == "placelauncherurl") {
         if (launcher_url_seen)
           return Invalid("Roblox player launch repeats PlaceLauncher URL");
@@ -481,9 +480,11 @@ Status ParseModern(std::string_view payload, LaunchFields* fields) {
 
 }  // namespace
 
-Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request) {
+Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request,
+                             std::string* authentication_ticket) {
   if (request == nullptr) return Invalid("Roblox launch output is null");
   *request = {};
+  if (authentication_ticket != nullptr) authentication_ticket->clear();
   if (uri.empty() || uri.size() > kMaximumRobloxLaunchUriBytes ||
       ContainsControlBytes(uri) || !IsValidUtf8(uri))
     return Invalid("Roblox launch URI size or encoding is invalid");
@@ -493,12 +494,17 @@ Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request) 
     return Invalid("Roblox launch URI has no supported scheme");
 
   const std::string scheme = AsciiLower(uri.substr(0, colon));
-  const std::string_view payload = uri.substr(colon + 1);
+  std::string_view payload = uri.substr(colon + 1);
+  if (scheme == "roblox-player") {
+    while (!payload.empty() && payload.front() == '/') {
+      payload.remove_prefix(1);
+    }
+  }
   LaunchFields fields;
   Status status;
 
   if (scheme == "roblox-player")
-    status = ParseClassic(payload, &fields);
+    status = ParseClassic(payload, &fields, authentication_ticket);
   else if (scheme == "roblox")
     status = ParseModern(payload, &fields);
   else
