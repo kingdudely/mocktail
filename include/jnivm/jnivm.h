@@ -150,7 +150,7 @@ struct RobloxTextInputCallbacks {
 class VM final : public mocktail_libjnivm::VM {
  public:
   VM();
-  ~VM() override;
+  ~VM();
 
   VM(const VM&) = delete;
   VM& operator=(const VM&) = delete;
