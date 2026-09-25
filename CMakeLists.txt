@@ -9,42 +9,17 @@ project(Mocktail
 include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
-# Mocktail implements the JNI ABI with native C++ objects. It does not run a
-# host JVM; the JNI headers are only the ABI/type definitions. Prefer vendored
-# headers when present, otherwise use the JNI headers from an installed JDK.
-set(MOCKTAIL_JNI_INCLUDE_DIR
-  ${CMAKE_SOURCE_DIR}/third_party/jni/include)
-
-if(EXISTS "${MOCKTAIL_JNI_INCLUDE_DIR}/jni.h")
-  set(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
-    ${MOCKTAIL_JNI_INCLUDE_DIR})
-  set(MOCKTAIL_JNI_INCLUDE_DIRS
-    ${MOCKTAIL_JNI_INCLUDE_DIR}
-    ${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR})
-else()
-  find_package(JNI QUIET)
-  if(NOT JNI_FOUND OR NOT JNI_INCLUDE_DIRS)
-    message(FATAL_ERROR
-      "JNI headers are missing. Install a JDK development package or provide third_party/jni/include")
-  endif()
-  set(MOCKTAIL_JNI_INCLUDE_DIRS ${JNI_INCLUDE_DIRS})
+# libjnivm owns the JNI object/reference/string/method machinery. Mocktail only
+# supplies the native Android/Roblox classes and their behavior.
+add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_definitions(jnivm PRIVATE jnivm=mocktail_libjnivm)
 endif()
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-add_library(mocktail_compile_options INTERFACE)
-target_compile_options(mocktail_compile_options INTERFACE
-  "$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Wno-unused-parameter;-fno-exceptions;-g>"
-)
-
-function(mocktail_apply_compile_options target_name)
-  target_link_libraries(${target_name} PRIVATE mocktail_compile_options)
-endfunction()
-
-# Mocktail uses its in-tree JNI compatibility layer in src/jnivm/jnivm.cc.
-# No external libjnivm build is required.
+target_compile_definitions(jnivm PRIVATE
+  JNIVM_FAKE_JNI_SYNTAX=0
+  JNIVM_ENABLE_RETURN_NON_ZERO
+  -DJNIVM_ENABLE_GC)
+target_link_libraries(jnivm PUBLIC Threads::Threads)
 
 add_subdirectory(third_party/mcpelauncher-linker)
 
@@ -76,8 +51,11 @@ add_library(mocktail_legacy_jnivm STATIC
   src/jnivm/jnivm.cc
   src/jnivm/native_android_objects.cc)
 target_include_directories(mocktail_legacy_jnivm PUBLIC
-  include ${MOCKTAIL_JNI_INCLUDE_DIRS})
-target_link_libraries(mocktail_legacy_jnivm PUBLIC Threads::Threads)
+  include
+  ${CMAKE_SOURCE_DIR}/third_party/libjnivm/include
+  ${MOCKTAIL_JNI_INCLUDE_DIRS})
+target_link_libraries(mocktail_legacy_jnivm PUBLIC
+  jnivm Threads::Threads)
 mocktail_apply_compile_options(mocktail_legacy_jnivm)
 add_library(Mocktail::LegacyJni ALIAS mocktail_legacy_jnivm)
 
