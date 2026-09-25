@@ -8,6 +8,9 @@ RuntimeConfig RuntimeConfig::FromEnvironment(const Environment& environment) {
       environment.GetOr("ROBLOX_LIB_PATH", "./libroblox.so");
   config.window_.title = environment.GetOr("MOCKTAIL_WIN_TITLE", "Roblox");
   config.theme_mode_ = environment.GetOr("MOCKTAIL_THEME", "roblox");
+  config.headless_ = environment.GetOr("MOCKTAIL_HEADLESS", "0") == "1";
+  config.microphone_enabled_ =
+      environment.GetOr("MOCKTAIL_MICROPHONE", "1") != "0";
   return config;
 }
 
