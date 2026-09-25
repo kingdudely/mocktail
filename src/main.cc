@@ -51,7 +51,11 @@ std::filesystem::path ExecutableDirectory() {
 }
 
 bool SetDefaultPayloadEnvironment() {
-  const std::filesystem::path root = ExecutableDirectory();
+  const char* home = std::getenv("HOME");
+  const std::filesystem::path root =
+      (home != nullptr && home[0] != '\0')
+          ? std::filesystem::path(home)
+          : ExecutableDirectory();
   const std::filesystem::path library = root / "libroblox.so";
   const std::filesystem::path assets = root / "assets";
 
