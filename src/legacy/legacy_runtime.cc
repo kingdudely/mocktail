@@ -49,8 +49,6 @@
 #include "compat/bionic_prctl_runtime.h"
 #include "compat/bionic_pthread_create_runtime.h"
 #include "compat/bionic_socket_runtime.h"
-#include "compat/build_profile.h"
-#include "compat/elf_build_id.h"
 #include "compat/guest_abi.h"
 #include "compat/host_abi_experiment.h"
 #include "compat/host_abi_profile.h"
@@ -63,10 +61,8 @@
 #include "runtime/device_memory_profile.h"
 #include "runtime/display_size.h"
 #include "runtime/environment.h"
-#include "runtime/discord_rpc.h"
 #include "runtime/jnivm_platform_web_callbacks.h"
 #include "runtime/owned_pthread.h"
-#include "runtime/platform_cache_migration.h"
 #include "runtime/roblox_app_lifecycle.h"
 #include "runtime/roblox_capability_resolver.h"
 #include "runtime/roblox_platform_web_symbols.h"
@@ -76,7 +72,6 @@
 #include "runtime/roblox_text_input_jni_bridge.h"
 #include "runtime/runtime_config.h"
 #include "runtime/runtime_paths.h"
-#include "runtime/texture_memory_policy.h"
 #include "services/client_settings_service.h"
 #include "services/http_client.h"
 #include "window/window.h"
@@ -84,11 +79,6 @@
 
 #ifdef MOCKTAIL_USE_BIONIC_LINKER
 #include <mcpelauncher/linker.h>
-#endif
-
-#ifndef MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST
-#define MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST \
-  "config/roblox_compatibility.json"
 #endif
 
 std::atomic<bool> g_allow_legacy_binary_patches{false};
@@ -4493,17 +4483,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   const mocktail::runtime::ProcessEnvironment process_environment;
   const mocktail::runtime::RuntimeConfig runtime_config =
       mocktail::runtime::RuntimeConfig::FromEnvironment(process_environment);
-  mocktail::runtime::DiscordRpcSession discord_rpc(
-      runtime_config.discord_rpc());
-  if (runtime_config.discord_rpc().enabled) {
-    std::string discord_rpc_detail;
-    if (discord_rpc.Start(&discord_rpc_detail)) {
-      std::cout << "  [discord-rpc] enabled; browsing activity queued\n";
-    } else {
-      std::cerr << "  [discord-rpc] unavailable: " << discord_rpc_detail
-                << "; continuing without Rich Presence\n";
-    }
-  }
   const mocktail::runtime::InputCapabilityConfig& input_capabilities =
       runtime_config.input_capabilities();
   if (!runtime_config.frame_rate().valid()) {
@@ -4542,93 +4521,24 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   const std::string library_path =
       runtime_config.roblox_library_path().string();
 
-  const mocktail::compat::BuildIdResult build_id_result =
-      mocktail::compat::ReadElfBuildId(library_path);
-  if (!build_id_result) {
-    std::cerr << "[FATAL] Cannot identify Roblox library '" << library_path
-              << "': " << build_id_result.error << '\n';
-    return EXIT_FAILURE;
-  }
+  const std::string library_path =
+      runtime_config.roblox_library_path().string();
 
-  const char* manifest_override =
-      std::getenv("MOCKTAIL_COMPATIBILITY_MANIFEST");
-  const std::string compatibility_manifest =
-      manifest_override != nullptr && manifest_override[0] != '\0'
-          ? manifest_override
-          : MOCKTAIL_DEFAULT_COMPATIBILITY_MANIFEST;
-  const mocktail::compat::ProfileLookupResult profile_result =
-      mocktail::compat::FindBuildProfile(compatibility_manifest,
-                                         build_id_result.build_id);
-  if (!profile_result) {
-    std::cerr << "[FATAL] Cannot read Roblox compatibility profile: "
-              << profile_result.error << '\n';
-    return EXIT_FAILURE;
-  }
-  if (!profile_result.profile.has_value()) {
-    std::cerr << "[FATAL] Unsupported Roblox Build ID "
-              << build_id_result.build_id << ".\n"
-              << "  Add and validate a profile in " << compatibility_manifest
-              << " before starting native code.\n";
-    return EXIT_FAILURE;
-  }
+  // The runtime operates directly on the supplied ELF. No external Build-ID
+  // allowlist or compatibility manifest is required to launch.
+  g_allow_legacy_binary_patches.store(false, std::memory_order_release);
+  g_allow_host_abi_bridges.store(false, std::memory_order_release);
+  g_allow_host_constructor_replay.store(false, std::memory_order_release);
+  g_active_host_abi_profile.store(nullptr, std::memory_order_release);
 
-  const mocktail::compat::BuildProfile& build_profile =
-      *profile_result.profile;
-  const mocktail::compat::HostAbiProfile* host_abi_profile =
-      mocktail::compat::FindHostAbiProfile(build_profile.elf_build_id);
-  const bool experiment_allowed =
-      build_profile.default_allowed || options.allow_unverified_build;
-  g_allow_legacy_binary_patches.store(
-      build_profile.allow_legacy_binary_patches, std::memory_order_release);
-  const bool allow_host_abi_bridges =
-      build_profile.allow_host_abi_bridges && experiment_allowed &&
-      host_abi_profile != nullptr &&
-      host_abi_profile->bridge_entry_count > 0;
-  const bool allow_host_constructor_replay =
-      build_profile.allow_host_constructor_replay &&
-      allow_host_abi_bridges && host_abi_profile->init_array_offset != 0 &&
-      host_abi_profile->HasValidConstructorRanges();
-  g_allow_host_abi_bridges.store(allow_host_abi_bridges,
-                                 std::memory_order_release);
-  g_allow_host_constructor_replay.store(allow_host_constructor_replay,
-                                        std::memory_order_release);
-  g_active_host_abi_profile.store(host_abi_profile,
-                                  std::memory_order_release);
-  g_host_abi_install_attempted = false;
-  g_host_abi_install_result = {};
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION",
-                build_profile.version_name.c_str());
-  const std::string roblox_version_code =
-      std::to_string(build_profile.version_code);
-  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE",
-                roblox_version_code.c_str());
-  const std::string default_user_agent =
-      "Roblox/" + build_profile.version_name +
-      " (Linux; Android 33; Mocktail)";
-  SetEnvDefault("MOCKTAIL_USER_AGENT", default_user_agent.c_str());
-  mocktail::compat::SetLegacyBionicDiagnosticsEnabled(
-      build_profile.allow_legacy_binary_patches);
-  std::cout << "  [compat] Roblox " << build_profile.version_name
-            << " Build ID " << build_profile.elf_build_id << " ("
-            << mocktail::compat::BuildStatusName(build_profile.status) << ")\n";
-  std::cout << "  [compat] legacy binary patches: "
-            << (build_profile.allow_legacy_binary_patches ? "enabled"
-                                                          : "disabled")
-            << '\n';
-  std::cout << "  [compat] Build-ID host ABI profile: "
-            << (allow_host_abi_bridges ? "allowed" : "denied")
-            << '\n';
-  std::cout << "  [compat] Build-ID constructor replay: "
-            << (allow_host_constructor_replay ? "allowed" : "denied")
-            << '\n'
+  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION", "unknown");
+  SetEnvDefault("MOCKTAIL_ROBLOX_VERSION_CODE", "0");
+  SetEnvDefault("MOCKTAIL_USER_AGENT",
+                "Roblox/unknown (Linux; Android 33; Mocktail)");
+  mocktail::compat::SetLegacyBionicDiagnosticsEnabled(false);
+
+  std::cout << "  [compat] live ABI mode; Build-ID profile lookup disabled\n"
             << std::flush;
-  if (!build_profile.default_allowed && !options.allow_unverified_build) {
-    std::cerr << "[FATAL] This Roblox build is not enabled for normal runs: "
-              << build_profile.reason << '\n'
-              << "  Use --allow-unverified-build only for an explicit "
-                 "compatibility check.\n";
-    return EXIT_FAILURE;
-  }
 
   ApplyAuthStartupDefaults(!dependencies.roblox_credential().empty(),
                            user_overrode_start_lua_app_dm,
@@ -4651,15 +4561,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
   }
 #endif
 
-  if (build_profile.allow_legacy_binary_patches) {
-    std::cerr
-        << "[FATAL] Legacy binary patches and signal recovery were removed.\n"
-        << "  Build ID " << build_profile.elf_build_id
-        << " is not supported on this runtime.\n";
-    return EXIT_FAILURE;
-  }
-  std::cout << "  [compat] signal-recovery handler disabled for this Build "
-               "ID\n";
   const bool is_headless = runtime_config.headless();
   if (!HasEnvValue("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS")) {
     setenv("MOCKTAIL_APP_BRIDGE_HEADLESS_INIT_PARAMS", is_headless ? "1" : "0",
@@ -7144,13 +7045,6 @@ int mocktail::legacy::Run(const runtime::CommandLineOptions& options,
     }
   }
 
-  if (!build_profile.default_allowed) {
-    std::cerr
-        << "[FATAL] Compatibility run returned, but Build ID "
-        << build_profile.elf_build_id
-        << " has not passed the readiness gates; refusing a success exit.\n";
-    return EXIT_FAILURE;
-  }
   if (is_headless) {
     std::cerr << "[FATAL] Headless LuaApp readiness evidence is not wired into "
                  "the supported runtime yet.\n";
