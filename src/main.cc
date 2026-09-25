@@ -50,14 +50,17 @@ std::filesystem::path ExecutableDirectory() {
   return std::filesystem::current_path();
 }
 
-bool SetDefaultPayloadEnvironment() {
-  const char* home = std::getenv("HOME");
-  const std::filesystem::path root =
-      (home != nullptr && home[0] != '\0')
-          ? std::filesystem::path(home)
-          : ExecutableDirectory();
-  const std::filesystem::path library = root / "libroblox.so";
-  const std::filesystem::path assets = root / "assets";
+bool SetPayloadEnvironment(
+    const mocktail::runtime::CommandLineOptions& options) {
+  const std::filesystem::path root = ExecutableDirectory();
+  const std::filesystem::path library =
+      options.roblox_library_path.empty()
+          ? root / "libroblox.so"
+          : std::filesystem::path(options.roblox_library_path);
+  const std::filesystem::path assets =
+      options.asset_path.empty()
+          ? root / "assets"
+          : std::filesystem::path(options.asset_path);
 
   auto set_default = [](const char* name, const std::string& value) {
     return std::getenv(name) != nullptr ||
@@ -189,7 +192,7 @@ int main(int argc, char* argv[]) {
 
   ExportLaunchRequest(launch_request);
 
-  if (!SetDefaultPayloadEnvironment()) {
+  if (!SetPayloadEnvironment(options)) {
     std::cerr << "could not set the Roblox payload environment\n";
     mocktail::runtime::SecurelyClearString(&roblosecurity);
     return EXIT_FAILURE;
