@@ -202,67 +202,77 @@ void HookContext(ENV* env, std::shared_ptr<Class> clazz) {
       });
 
   clazz->HookInstanceFunction(env, "getApplicationContext",
-      [env](JNIEnv*, Object*) {
-        return env->GetClass<AndroidApplication>(
-            "android/app/Application")->Instantiate(env);
+      [](JNIEnv* e, Object*) {
+        auto* current = mocktail_libjnivm::ENV::FromJNIEnv(e);
+        return current->GetClass<AndroidApplication>(
+            "android/app/Application")->Instantiate(current);
       });
 
   clazz->HookInstanceFunction(env, "getBaseContext",
-      [env](JNIEnv*, Object*) {
-        return env->GetClass<AndroidContext>(
-            "android/content/Context")->Instantiate(env);
+      [](JNIEnv* e, Object*) {
+        auto* current = mocktail_libjnivm::ENV::FromJNIEnv(e);
+        return current->GetClass<AndroidContext>(
+            "android/content/Context")->Instantiate(current);
       });
 
   clazz->HookInstanceFunction(env, "getContext",
-      [env](JNIEnv*, Object*) {
-        return env->GetClass<AndroidContext>(
-            "android/content/Context")->Instantiate(env);
+      [](JNIEnv* e, Object*) {
+        auto* current = mocktail_libjnivm::ENV::FromJNIEnv(e);
+        return current->GetClass<AndroidContext>(
+            "android/content/Context")->Instantiate(current);
       });
 
   clazz->HookInstanceFunction(env, "getAssets",
-      [env](JNIEnv*, Object*) {
-        return GenericObject(env, "android/content/res/AssetManager");
+      [](JNIEnv* e, Object*) {
+        return GenericObject(mocktail_libjnivm::ENV::FromJNIEnv(e),
+                             "android/content/res/AssetManager");
       });
 
   clazz->HookInstanceFunction(env, "getAssetManager",
-      [env](JNIEnv*, Object*) {
-        return GenericObject(env, "android/content/res/AssetManager");
+      [](JNIEnv* e, Object*) {
+        return GenericObject(mocktail_libjnivm::ENV::FromJNIEnv(e),
+                             "android/content/res/AssetManager");
       });
 
   clazz->HookInstanceFunction(env, "getResources",
-      [env](JNIEnv*, Object*) {
-        return GenericObject(env, "android/content/res/Resources");
+      [](JNIEnv* e, Object*) {
+        return GenericObject(mocktail_libjnivm::ENV::FromJNIEnv(e),
+                             "android/content/res/Resources");
       });
 
   clazz->HookInstanceFunction(env, "getClassLoader",
-      [env](JNIEnv*, Object*) {
-        return GenericObject(env, "java/lang/ClassLoader");
+      [](JNIEnv* e, Object*) {
+        return GenericObject(mocktail_libjnivm::ENV::FromJNIEnv(e),
+                             "java/lang/ClassLoader");
       });
 
   clazz->HookInstanceFunction(env, "getSharedPreferences",
-      [env](JNIEnv*, Object*, jstring, jint) {
-        return GenericObject(env, "android/content/SharedPreferences");
+      [](JNIEnv* e, Object*, jstring, jint) {
+        return GenericObject(mocktail_libjnivm::ENV::FromJNIEnv(e),
+                             "android/content/SharedPreferences");
       });
 
   clazz->HookInstanceFunction(env, "getPackageManager",
-      [env](JNIEnv* e, Object*) {
-        return env->GetClass<AndroidPackageManager>(
-            "android/content/pm/PackageManager")->Instantiate(e);
+      [](JNIEnv* e, Object*) {
+        auto* current = mocktail_libjnivm::ENV::FromJNIEnv(e);
+        return current->GetClass<AndroidPackageManager>(
+            "android/content/pm/PackageManager")->Instantiate(current);
       });
 
   clazz->HookInstanceFunction(env, "getSystemService",
-      [env](JNIEnv* e, Object*, jstring service) -> std::shared_ptr<Object> {
+      [](JNIEnv* e, Object*, jstring service) -> std::shared_ptr<Object> {
+        auto* current = mocktail_libjnivm::ENV::FromJNIEnv(e);
         const std::string name = StringValue(e, service);
-        if (name == "window") return ServiceObject(e, "android/view/WindowManager");
-        if (name == "display") return ServiceObject(e, "android/hardware/display/DisplayManager");
-        if (name == "audio") return ServiceObject(e, "android/media/AudioManager");
+        if (name == "window") return ServiceObject(current, "android/view/WindowManager");
+        if (name == "display") return ServiceObject(current, "android/hardware/display/DisplayManager");
+        if (name == "audio") return ServiceObject(current, "android/media/AudioManager");
         if (name == "input_method") {
-          return ServiceObject(e, "android/view/inputmethod/InputMethodManager");
+          return ServiceObject(current, "android/view/inputmethod/InputMethodManager");
         }
-        if (name == "sensor") return ServiceObject(e, "android/hardware/SensorManager");
-        if (name == "connectivity") return ServiceObject(e, "android/net/ConnectivityManager");
-        if (name == "power") return ServiceObject(e, "android/os/PowerManager");
-        return GenericObject(e, "java/lang/Object");
+        if (name == "sensor") return ServiceObject(current, "android/hardware/SensorManager");
+        if (name == "connectivity") return ServiceObject(current, "android/net/ConnectivityManager");
+        if (name == "power") return ServiceObject(current, "android/os/PowerManager");
+        return GenericObject(current, "java/lang/Object");
       });
 }
 
