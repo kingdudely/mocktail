@@ -258,8 +258,8 @@ target_link_libraries(mocktail_legacy_runtime PRIVATE
 mocktail_apply_compile_options(mocktail_legacy_runtime)
 
 add_executable(roblox src/main.cc)
-target_include_directories(mocktail PRIVATE include src)
-target_link_libraries(mocktail PRIVATE
+target_include_directories(roblox PRIVATE include src)
+target_link_libraries(roblox PRIVATE
   mocktail_legacy_runtime Mocktail::AuthRuntimeComposition
   Mocktail::BrowserAuth
   mocktail_fmod_jni_audio_bridge
