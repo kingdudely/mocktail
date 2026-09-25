@@ -2,24 +2,38 @@
 #define MOCKTAIL_RUNTIME_ROBLOX_LAUNCH_URI_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "mocktail/status.h"
-#include "runtime/roblox_experience_launch_bridge.h"
 
-namespace mocktail {
-namespace runtime {
+namespace mocktail::runtime {
 
 inline constexpr std::size_t kMaximumRobloxLaunchUriBytes = 64 * 1024;
 
-// Converts the two Roblox website launch protocols into the owned
-// ExperienceProtocol contract used by the supported game-session pipeline.
-// Authentication tickets and tracker IDs are discarded; the runtime already
-// has a validated account identity.
-Status ParseRobloxLaunchUri(std::string_view uri,
-                            RobloxExperienceLaunchRequest* request);
+struct RobloxLaunchRequest {
+  std::int64_t place_id = 0;
+  std::int64_t user_id = 0;
+  std::int64_t conversation_id = 0;
+  std::int64_t referred_by_player_id = 0;
+  std::string game_instance_id;
+  std::string reserved_server_access_code;
+  std::string call_id;
+  std::string referral_page;
+  std::string access_code;
+  std::string link_code;
+  std::string launch_data;
+  std::string event_id;
+  std::string game_join_context;
+  std::string join_attempt_id;
+  std::string join_attempt_origin;
+  std::string iso_context;
+  std::string authentication_ticket;
+};
 
-}  // namespace runtime
-}  // namespace mocktail
+Status ParseRobloxLaunchUri(std::string_view uri, RobloxLaunchRequest* request);
+
+}  // namespace mocktail::runtime
 
 #endif  // MOCKTAIL_RUNTIME_ROBLOX_LAUNCH_URI_H_
