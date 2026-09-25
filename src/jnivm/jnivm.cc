@@ -45,9 +45,7 @@ thread_local mocktail::audio::FmodThreadFloatingPointMode g_thread_audio_fp_mode
 thread_local std::vector<std::vector<jobject>> g_local_frames;
 
 std::recursive_mutex g_jni_state_mutex;
-// Authentication preflight can briefly own a second VM. Keep every live
-// owner registered so discarding that candidate cannot disable the VM that
-// the runtime retained. Access is serialized by g_jni_state_mutex.
+
 std::vector<VM*> g_live_vms;
 
 bool IsLiveVmLocked(const VM* vm) {
@@ -377,7 +375,6 @@ enum class JniMethodTag : uint16_t {
   kHideKeyboard,
   kSetKeyboardText,
 
-  // Direct native C++ framework methods.
   kContextGetPackageName,
   kContextGetFilesDir,
   kContextGetCacheDir,
@@ -641,7 +638,6 @@ RobloxAuthIdentity ResearchRobloxIdentityFromEnvironment() {
     return identity;
   }
 
-  // Normal startup injects identity through VM::SetRobloxAuthIdentity.
   identity.user_id = static_cast<int64_t>(parsed);
   const char* username = std::getenv("MOCKTAIL_ROBLOX_USERNAME");
   if (username && username[0] != '\0') {
@@ -698,7 +694,6 @@ static jclass StoreClass(std::shared_ptr<Class> cls) {
   return handle;
 }
 
-
 jobject StoreObject(std::unique_ptr<Object> object) {
   if (object == nullptr) return nullptr;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
@@ -735,8 +730,6 @@ void ReleaseJniReference(jobject obj) {
   g_object_storage.erase(obj);
 }
 
-
-
 NativeObject* NativeObjectFromRef(jobject obj) {
   if (obj == nullptr) return nullptr;
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
@@ -744,7 +737,6 @@ NativeObject* NativeObjectFromRef(jobject obj) {
   if (it == g_object_storage.end()) return nullptr;
   return dynamic_cast<NativeObject*>(it->second.get());
 }
-
 
 AndroidContext* AndroidContextFromRef(jobject obj) {
   NativeObject* object = NativeObjectFromRef(obj);
@@ -1019,7 +1011,7 @@ std::string JavaStringUtf8Bytes(const std::vector<jchar>& utf16) {
       code_point = 0x10000 + ((code_point - 0xd800) << 10) +
                    (utf16[++index] - 0xdc00);
     } else if (code_point >= 0xd800 && code_point <= 0xdfff) {
-      // CharsetEncoder replaces each malformed UTF-16 unit with '?'.
+
       output.push_back('?');
       continue;
     }
@@ -2174,8 +2166,6 @@ jobject MakeApplicationInfoObject() {
   jobject object = SingletonObject("android/content/pm/ApplicationInfo");
   SetStringFieldRaw(object, "packageName", "com.roblox.client");
 
-  // The minimal runtime has no APK. Keep ApplicationInfo source paths
-  // synthetic and derive the native library directory from the CLI payload.
   const char* source_dir = std::getenv("MOCKTAIL_APPLICATION_SOURCE_DIR");
   if (source_dir == nullptr || source_dir[0] == '\0') {
     source_dir = ".";
@@ -2484,7 +2474,7 @@ jobject ObjectResultForReceiverMethod(jobject obj, const char* name) {
     return MakeString("");
   }
   if (std::strcmp(name, "getSystemService") == 0) {
-    return nullptr;  // ObjectResultForMethodV handles the service argument.
+    return nullptr;
   }
   if (std::strcmp(name, "loadClass") == 0 ||
       std::strcmp(name, "findClass") == 0 ||
@@ -2497,7 +2487,6 @@ jobject ObjectResultForReceiverMethod(jobject obj, const char* name) {
                             : ObjectFieldValue(obj, field_name.c_str());
 }
 
-
 jobject ClassObjectForName(const std::string& requested_name) {
   std::string class_name = requested_name;
   std::replace(class_name.begin(), class_name.end(), '.', '/');
@@ -2509,9 +2498,6 @@ jobject ClassObjectForName(const std::string& requested_name) {
 jobject ObjectResultForMethodV(jobject obj, jmethodID method_id, va_list args) {
   const char* name = MethodName(method_id);
 
-  // Typed Android objects call native C++ methods directly. The generic
-  // compatibility dispatch below remains as a fallback while classes are
-  // migrated one at a time.
   if (AndroidContext* context = AndroidContextFromRef(obj)) {
     switch (MethodTag(method_id)) {
       case JniMethodTag::kContextGetPackageName:
@@ -2825,7 +2811,7 @@ bool HandleWebRtcAudioManagerBooleanMethod(jobject obj, jmethodID method_id,
   } else if (IsWebRtcAudioManagerMethod(obj, method_id,
                                         "isDeviceBlacklistedForOpenSLESUsage",
                                         "()Z")) {
-    // Host recording is provided by AudioRecord JNI, not Android OpenSL ES.
+
     *result = JNI_TRUE;
   } else if (IsWebRtcAudioManagerMethod(obj, method_id,
                                         "isCommunicationModeEnabled", "()Z")) {
@@ -3414,8 +3400,7 @@ bool HandleWebRtcAudioRecordBooleanMethodV(jobject obj, jmethodID method_id,
              IsWebRtcAudioRecordMethod(obj, method_id, "enableBuiltInAGC",
                                        "(Z)Z")) {
     (void)va_arg(args, jint);
-    // WebRTC's software processing remains active; these Android controls are
-    // accepted as compatibility no-ops.
+
     value = true;
   } else if (IsWebRtcAudioRecordMethod(obj, method_id, "isAudioConfigVerified",
                                        "()Z") ||
@@ -3433,7 +3418,7 @@ bool HandleWebRtcAudioRecordBooleanMethodV(jobject obj, jmethodID method_id,
 }
 
 bool HandleWebRtcAudioRecordBooleanMethodA(jobject obj, jmethodID method_id,
-                                           const jvalue * /*args*/,
+                                           const jvalue * ,
                                            jboolean *result) {
   bool handled = true;
   bool value = false;
@@ -3487,8 +3472,7 @@ bool HandleWebRtcAudioTrackIntMethodV(jobject obj, jmethodID method_id,
                                       "()I") ||
              IsWebRtcAudioTrackMethod(obj, method_id, "getStreamVolume",
                                       "()I")) {
-    // Host volume remains under SDL/the desktop mixer. Return a stable,
-    // internally consistent Android-style range to WebRTC.
+
     value = 100;
   } else {
     return false;
@@ -3551,7 +3535,7 @@ bool HandleWebRtcAudioTrackBooleanMethodV(jobject obj, jmethodID method_id,
 }
 
 bool HandleWebRtcAudioTrackBooleanMethodA(jobject obj, jmethodID method_id,
-                                          const jvalue * /*args*/,
+                                          const jvalue * ,
                                           jboolean *result) {
   VM *vm = CurrentVM();
   bool value = false;
@@ -3782,7 +3766,6 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
   }
   return nullptr;
 }
-
 
 jobject ObjectResultForMethod(jmethodID method_id) {
   const char* name = MethodName(method_id);
@@ -4298,7 +4281,7 @@ void JNICALL CallStaticVoidMethod(JNIEnv* env, jclass clazz,
   va_end(args);
 }
 
-jobject JNICALL CallStaticObjectMethod(JNIEnv * /*env*/, jclass clazz,
+jobject JNICALL CallStaticObjectMethod(JNIEnv * , jclass clazz,
                                        jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallStaticObjectMethod: " << MethodName(methodID)
@@ -4315,7 +4298,7 @@ jobject JNICALL CallStaticObjectMethod(JNIEnv * /*env*/, jclass clazz,
   return result != nullptr ? result : StaticObjectResultForMethod(methodID);
 }
 
-jboolean JNICALL CallStaticBooleanMethod(JNIEnv* /*env*/, jclass /*clazz*/, jmethodID methodID, ...) {
+jboolean JNICALL CallStaticBooleanMethod(JNIEnv* , jclass , jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallStaticBooleanMethod: " << MethodName(methodID) << '\n';
   }
@@ -4357,7 +4340,7 @@ jlong LongResultForReceiverMethod(jobject obj, const char* name) {
   return 0;
 }
 
-jint JNICALL CallStaticIntMethod(JNIEnv * /*env*/, jclass /*clazz*/,
+jint JNICALL CallStaticIntMethod(JNIEnv * , jclass ,
                                  jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallStaticIntMethod: " << MethodName(methodID)
@@ -4370,7 +4353,7 @@ jint JNICALL CallStaticIntMethod(JNIEnv * /*env*/, jclass /*clazz*/,
   return result;
 }
 
-jlong JNICALL CallStaticLongMethod(JNIEnv * /*env*/, jclass /*clazz*/,
+jlong JNICALL CallStaticLongMethod(JNIEnv * , jclass ,
                                    jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallStaticLongMethod: " << MethodName(methodID)
@@ -4379,7 +4362,7 @@ jlong JNICALL CallStaticLongMethod(JNIEnv * /*env*/, jclass /*clazz*/,
   return StaticLongResultForMethod(methodID);
 }
 
-void JNICALL CallVoidMethod(JNIEnv * /*env*/, jobject obj, jmethodID methodID,
+void JNICALL CallVoidMethod(JNIEnv * , jobject obj, jmethodID methodID,
                             ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallVoidMethod: " << MethodName(methodID) << '\n';
@@ -4398,7 +4381,7 @@ void JNICALL CallVoidMethod(JNIEnv * /*env*/, jobject obj, jmethodID methodID,
   va_end(args);
 }
 
-jobject JNICALL CallObjectMethod(JNIEnv* /*env*/, jobject obj,
+jobject JNICALL CallObjectMethod(JNIEnv* , jobject obj,
                                  jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallObjectMethod: " << MethodName(methodID) << '\n';
@@ -4410,7 +4393,7 @@ jobject JNICALL CallObjectMethod(JNIEnv* /*env*/, jobject obj,
   return result;
 }
 
-jboolean JNICALL CallBooleanMethod(JNIEnv* /*env*/, jobject obj,
+jboolean JNICALL CallBooleanMethod(JNIEnv* , jobject obj,
                                    jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallBooleanMethod: " << MethodName(methodID) << '\n';
@@ -4446,7 +4429,7 @@ jboolean JNICALL CallBooleanMethod(JNIEnv* /*env*/, jobject obj,
                  : BooleanResultForReceiverMethod(obj, MethodName(methodID));
 }
 
-jint JNICALL CallIntMethod(JNIEnv* /*env*/, jobject obj, jmethodID methodID, ...) {
+jint JNICALL CallIntMethod(JNIEnv* , jobject obj, jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallIntMethod: " << MethodName(methodID) << '\n';
   }
@@ -4463,7 +4446,7 @@ jint JNICALL CallIntMethod(JNIEnv* /*env*/, jobject obj, jmethodID methodID, ...
                  : IntResultForReceiverMethod(obj, MethodName(methodID));
 }
 
-jlong JNICALL CallLongMethod(JNIEnv* /*env*/, jobject obj,
+jlong JNICALL CallLongMethod(JNIEnv* , jobject obj,
                              jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallLongMethod: " << MethodName(methodID) << '\n';
@@ -4648,7 +4631,7 @@ jobject ConstructObjectA(jclass clazz, jmethodID methodID, const jvalue *args) {
   return object;
 }
 
-jobject JNICALL NewObject(JNIEnv * /*env*/, jclass clazz, jmethodID methodID,
+jobject JNICALL NewObject(JNIEnv * , jclass clazz, jmethodID methodID,
                           ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] NewObject: " << MethodName(methodID) << '\n';
@@ -4660,32 +4643,32 @@ jobject JNICALL NewObject(JNIEnv * /*env*/, jclass clazz, jmethodID methodID,
   return object;
 }
 
-jbyte JNICALL CallStaticByteMethod(JNIEnv* /*env*/, jclass /*clazz*/,
-                                   jmethodID /*methodID*/, ...) {
+jbyte JNICALL CallStaticByteMethod(JNIEnv* , jclass ,
+                                   jmethodID , ...) {
   return 0;
 }
 
-jchar JNICALL CallStaticCharMethod(JNIEnv* /*env*/, jclass /*clazz*/,
-                                   jmethodID /*methodID*/, ...) {
+jchar JNICALL CallStaticCharMethod(JNIEnv* , jclass ,
+                                   jmethodID , ...) {
   return 0;
 }
 
-jshort JNICALL CallStaticShortMethod(JNIEnv* /*env*/, jclass /*clazz*/,
-                                     jmethodID /*methodID*/, ...) {
+jshort JNICALL CallStaticShortMethod(JNIEnv* , jclass ,
+                                     jmethodID , ...) {
   return 0;
 }
 
-jfloat JNICALL CallStaticFloatMethod(JNIEnv* /*env*/, jclass /*clazz*/,
-                                     jmethodID /*methodID*/, ...) {
+jfloat JNICALL CallStaticFloatMethod(JNIEnv* , jclass ,
+                                     jmethodID , ...) {
   return 0.0f;
 }
 
-jdouble JNICALL CallStaticDoubleMethod(JNIEnv* /*env*/, jclass /*clazz*/,
-                                       jmethodID /*methodID*/, ...) {
+jdouble JNICALL CallStaticDoubleMethod(JNIEnv* , jclass ,
+                                       jmethodID , ...) {
   return 0.0;
 }
 
-jbyte JNICALL CallByteMethod(JNIEnv* /*env*/, jobject /*obj*/,
+jbyte JNICALL CallByteMethod(JNIEnv* , jobject ,
                              jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallByteMethod: " << MethodName(methodID) << '\n';
@@ -4693,13 +4676,13 @@ jbyte JNICALL CallByteMethod(JNIEnv* /*env*/, jobject /*obj*/,
   return 0;
 }
 
-jchar JNICALL CallCharMethod(JNIEnv* /*env*/, jobject /*obj*/,
-                             jmethodID /*methodID*/, ...) {
+jchar JNICALL CallCharMethod(JNIEnv* , jobject ,
+                             jmethodID , ...) {
   return 0;
 }
 
-jshort JNICALL CallShortMethod(JNIEnv* /*env*/, jobject /*obj*/,
-                               jmethodID /*methodID*/, ...) {
+jshort JNICALL CallShortMethod(JNIEnv* , jobject ,
+                               jmethodID , ...) {
   return 0;
 }
 
@@ -4716,7 +4699,7 @@ jfloat FloatResultForReceiverMethod(jobject obj, const char* name) {
                             : FloatFieldValue(obj, field_name.c_str());
 }
 
-jfloat JNICALL CallFloatMethod(JNIEnv* /*env*/, jobject obj,
+jfloat JNICALL CallFloatMethod(JNIEnv* , jobject obj,
                                jmethodID methodID, ...) {
   if (TraceEnabled()) {
     std::cout << "  [JNI] CallFloatMethod: " << MethodName(methodID) << '\n';
@@ -4724,11 +4707,11 @@ jfloat JNICALL CallFloatMethod(JNIEnv* /*env*/, jobject obj,
   return FloatResultForReceiverMethod(obj, MethodName(methodID));
 }
 
-jdouble JNICALL CallDoubleMethod(JNIEnv* /*env*/, jobject /*obj*/,
-                                 jmethodID /*methodID*/, ...) {
+jdouble JNICALL CallDoubleMethod(JNIEnv* , jobject ,
+                                 jmethodID , ...) {
   return 0.0;
 }
-}  // namespace
+}
 
 jobject CreateAndroidConfiguration(JNIEnv* env) {
   if (env == nullptr) {
@@ -4868,7 +4851,7 @@ bool SameRobloxTextInputShowRequest(
          left.text == right.text && SameRobloxTextBoxInfo(left.info, right.info);
 }
 
-}  // namespace
+}
 
 void VM::SetRobloxTextInputCallbacks(
     std::shared_ptr<void> context,
@@ -5476,7 +5459,7 @@ void OnWebRtcAudioRecordData(void *context, const void *identity,
   }
 }
 
-} // namespace
+}
 
 void VM::SetWebRtcAudioManagerCallbacks(
     std::shared_ptr<void> context,
@@ -5559,9 +5542,6 @@ bool VM::DispatchWebRtcAudioManagerConstruct(jobject manager,
   SetBooleanFieldRaw(manager, "proAudio", parameters.pro_audio);
   SetBooleanFieldRaw(manager, "aAudio", parameters.aaudio);
 
-  // Execute the constructor's Java -> native callback before returning the
-  // object. The guest needs these formats even before it calls init(). No VM
-  // locks are held here: the native callback may make nested JNI calls.
   using CacheAudioParameters = void(JNICALL*)(
       JNIEnv*, jobject, jint, jint, jint, jboolean, jboolean, jboolean,
       jboolean, jboolean, jboolean, jboolean, jint, jint, jlong);
@@ -5795,7 +5775,7 @@ void OnWebRtcAudioTrackData(void *context, const void *identity,
   }
 }
 
-} // namespace
+}
 
 void VM::SetWebRtcAudioTrackCallbacks(
     std::shared_ptr<void> context, const WebRtcAudioTrackCallbacks &callbacks) {
@@ -6150,7 +6130,7 @@ JNIEnv* VM::GetJNIEnv() {
 
 void VM::RestoreFunctions() {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  // JNI_OnLoad replaces env->functions; restore all known environments.
+
   java_vm_storage_.functions = &invoke_interface_;
   java_vm_ = &java_vm_storage_;
   if (jni_env_) {
@@ -6161,7 +6141,6 @@ void VM::RestoreFunctions() {
   }
 }
 
-
 std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
   auto it = class_registry_.find(class_name);
@@ -6170,7 +6149,6 @@ std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
   }
   return it->second;
 }
-
 
 namespace {
 
@@ -6337,7 +6315,7 @@ jfloat JniCallFloatA(JNIEnv*, jobject obj, jmethodID methodID, const jvalue*) {
   return FloatResultForReceiverMethod(obj, MethodName(methodID));
 }
 
-}  // namespace
+}
 
 void VM::InitJNIFunctionTables() {
   invoke_interface_.AttachCurrentThread =
@@ -6375,7 +6353,7 @@ void VM::InitJNIFunctionTables() {
                      attach_args->name);
       }
     }
-    // Reattaching to the same VM must retain any guest JNI table wrapper.
+
     *env = g_thread_local_env;
     if (JniVmTraceEnabled()) {
       std::cout << "  [JNI] AttachCurrentThread return env="
@@ -6434,7 +6412,7 @@ void VM::InitJNIFunctionTables() {
     return JNI_OK;
   };
 
-  invoke_interface_.DestroyJavaVM = [](JavaVM* /*vm*/) -> jint {
+  invoke_interface_.DestroyJavaVM = [](JavaVM* ) -> jint {
     return JNI_OK;
   };
 
@@ -6442,7 +6420,7 @@ void VM::InitJNIFunctionTables() {
   java_vm_ = &java_vm_storage_;
 
   native_interface_.FindClass =
-      [](JNIEnv* /*env*/, const char* name) -> jclass {
+      [](JNIEnv* , const char* name) -> jclass {
     if (JniVmTraceEnabled()) {
       fprintf(stderr, "  [JNI-VM] FindClass name_ptr=%p name=\"%s\" vm=%p\n",
               static_cast<const void*>(name), name ? name : "",
@@ -6455,22 +6433,22 @@ void VM::InitJNIFunctionTables() {
     return StoreClass(std::move(cls));
   };
 
-  native_interface_.GetVersion = [](JNIEnv* /*env*/) -> jint {
+  native_interface_.GetVersion = [](JNIEnv* ) -> jint {
     return JNI_VERSION_1_6;
   };
 
   native_interface_.NewStringUTF =
-      [](JNIEnv* /*env*/, const char* utf) -> jstring {
+      [](JNIEnv* , const char* utf) -> jstring {
     return MakeString(utf);
   };
 
   native_interface_.GetStringUTFLength =
-      [](JNIEnv* /*env*/, jstring str) -> jsize {
+      [](JNIEnv* , jstring str) -> jsize {
     return StringModifiedUtf8Length(str);
   };
 
   native_interface_.GetStringUTFChars =
-      [](JNIEnv* /*env*/, jstring str, jboolean* isCopy) -> const char* {
+      [](JNIEnv* , jstring str, jboolean* isCopy) -> const char* {
     if (isCopy) *isCopy = JNI_FALSE;
     const char* result = StringChars(str);
     if (StringTraceEnabled()) {
@@ -6485,46 +6463,46 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.ReleaseStringUTFChars =
-      [](JNIEnv* /*env*/, jstring /*str*/, const char* /*chars*/) {};
+      [](JNIEnv* , jstring , const char* ) {};
 
-  native_interface_.ExceptionOccurred = [](JNIEnv* /*env*/) -> jthrowable {
+  native_interface_.ExceptionOccurred = [](JNIEnv* ) -> jthrowable {
     return nullptr;
   };
 
-  native_interface_.ExceptionDescribe = [](JNIEnv* /*env*/) {};
+  native_interface_.ExceptionDescribe = [](JNIEnv* ) {};
 
-  native_interface_.ExceptionClear = [](JNIEnv* /*env*/) {};
+  native_interface_.ExceptionClear = [](JNIEnv* ) {};
 
-  native_interface_.ExceptionCheck = [](JNIEnv* /*env*/) -> jboolean {
+  native_interface_.ExceptionCheck = [](JNIEnv* ) -> jboolean {
     return JNI_FALSE;
   };
 
-  native_interface_.Throw = [](JNIEnv* /*env*/, jthrowable /*obj*/) -> jint {
+  native_interface_.Throw = [](JNIEnv* , jthrowable ) -> jint {
     return JNI_ERR;
   };
 
   native_interface_.ThrowNew =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, const char* msg) -> jint {
+      [](JNIEnv* , jclass , const char* msg) -> jint {
     if (TraceEnabled()) {
       std::cout << "  [JNI] ThrowNew: " << (msg ? msg : "") << '\n';
     }
     return JNI_ERR;
   };
 
-  native_interface_.FatalError = [](JNIEnv* /*env*/, const char* msg) {
+  native_interface_.FatalError = [](JNIEnv* , const char* msg) {
     std::cerr << "[JNI] FatalError: " << (msg ? msg : "") << '\n';
     std::abort();
   };
 
   native_interface_.PushLocalFrame =
-      [](JNIEnv* /*env*/, jint /*capacity*/) -> jint {
+      [](JNIEnv* , jint ) -> jint {
     EnsureLocalFrame();
     g_local_frames.emplace_back();
     return JNI_OK;
   };
 
   native_interface_.PopLocalFrame =
-      [](JNIEnv* /*env*/, jobject result) -> jobject {
+      [](JNIEnv* , jobject result) -> jobject {
     EnsureLocalFrame();
     std::vector<jobject> frame = std::move(g_local_frames.back());
     if (g_local_frames.size() > 1) {
@@ -6542,12 +6520,12 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.EnsureLocalCapacity =
-      [](JNIEnv* /*env*/, jint /*capacity*/) -> jint {
+      [](JNIEnv* , jint ) -> jint {
     return JNI_OK;
   };
 
 	  native_interface_.RegisterNatives =
-	      [](JNIEnv* /*env*/, jclass clazz, const JNINativeMethod* methods, jint nMethods) -> jint {
+	      [](JNIEnv* , jclass clazz, const JNINativeMethod* methods, jint nMethods) -> jint {
 	    auto cls = ClassFromJClass(clazz);
 	    if (methods == nullptr || nMethods <= 0) {
 	      return JNI_OK;
@@ -6610,12 +6588,12 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.UnregisterNatives =
-      [](JNIEnv* /*env*/, jclass /*clazz*/) -> jint {
+      [](JNIEnv* , jclass ) -> jint {
     return JNI_OK;
   };
 
   native_interface_.GetStaticMethodID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
+      [](JNIEnv* , jclass clazz, const char* name, const char* sig) -> jmethodID {
     auto cls = ClassFromJClass(clazz);
     if (TraceEnabled()) {
       std::cout << "  [JNI] GetStaticMethodID for class "
@@ -6627,7 +6605,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetMethodID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jmethodID {
+      [](JNIEnv* , jclass clazz, const char* name, const char* sig) -> jmethodID {
     auto cls = ClassFromJClass(clazz);
     if (TraceEnabled()) {
       std::cout << "  [JNI] GetMethodID for class "
@@ -6639,7 +6617,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetStaticFieldID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
+      [](JNIEnv* , jclass clazz, const char* name, const char* sig) -> jfieldID {
     auto cls = ClassFromJClass(clazz);
     if (TraceEnabled()) {
       std::cout << "  [JNI] GetStaticFieldID for class "
@@ -6651,7 +6629,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetFieldID =
-      [](JNIEnv* /*env*/, jclass clazz, const char* name, const char* sig) -> jfieldID {
+      [](JNIEnv* , jclass clazz, const char* name, const char* sig) -> jfieldID {
     auto cls = ClassFromJClass(clazz);
     if (TraceEnabled()) {
       std::cout << "  [JNI] GetFieldID for class "
@@ -6663,14 +6641,14 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.AllocObject =
-      [](JNIEnv* /*env*/, jclass clazz) -> jobject {
+      [](JNIEnv* , jclass clazz) -> jobject {
     Trace("AllocObject");
     return MakeObject(clazz);
   };
 
   native_interface_.NewObject = NewObject;
 
-  native_interface_.NewObjectV = [](JNIEnv * /*env*/, jclass clazz,
+  native_interface_.NewObjectV = [](JNIEnv * , jclass clazz,
                                     jmethodID methodID,
                                     va_list args) -> jobject {
     if (TraceEnabled()) {
@@ -6683,7 +6661,7 @@ void VM::InitJNIFunctionTables() {
     return object;
   };
 
-  native_interface_.NewObjectA = [](JNIEnv * /*env*/, jclass clazz,
+  native_interface_.NewObjectA = [](JNIEnv * , jclass clazz,
                                     jmethodID methodID,
                                     const jvalue *args) -> jobject {
     if (TraceEnabled()) {
@@ -6693,7 +6671,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetObjectClass =
-      [](JNIEnv* /*env*/, jobject obj) -> jclass {
+      [](JNIEnv* , jobject obj) -> jclass {
     Trace("GetObjectClass");
     auto* native_object = NativeObjectFromRef(obj);
     if (native_object) {
@@ -6703,44 +6681,44 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetSuperclass =
-      [](JNIEnv* /*env*/, jclass /*sub*/) -> jclass {
+      [](JNIEnv* , jclass ) -> jclass {
     return StoreClass(FallbackClassForName("java/lang/Object"));
   };
 
   native_interface_.IsAssignableFrom =
-      [](JNIEnv* /*env*/, jclass sub, jclass sup) -> jboolean {
+      [](JNIEnv* , jclass sub, jclass sup) -> jboolean {
     return (sub == sup || sup == nullptr) ? JNI_TRUE : JNI_TRUE;
   };
 
   native_interface_.IsInstanceOf =
-      [](JNIEnv* /*env*/, jobject obj, jclass /*clazz*/) -> jboolean {
+      [](JNIEnv* , jobject obj, jclass ) -> jboolean {
     return obj ? JNI_TRUE : JNI_FALSE;
   };
 
   native_interface_.IsSameObject =
-      [](JNIEnv* /*env*/, jobject obj1, jobject obj2) -> jboolean {
+      [](JNIEnv* , jobject obj1, jobject obj2) -> jboolean {
     return obj1 == obj2 ? JNI_TRUE : JNI_FALSE;
   };
 
   native_interface_.FromReflectedMethod =
-      [](JNIEnv* /*env*/, jobject method) -> jmethodID {
+      [](JNIEnv* , jobject method) -> jmethodID {
     return reinterpret_cast<jmethodID>(method);
   };
 
   native_interface_.FromReflectedField =
-      [](JNIEnv* /*env*/, jobject field) -> jfieldID {
+      [](JNIEnv* , jobject field) -> jfieldID {
     return reinterpret_cast<jfieldID>(field);
   };
 
   native_interface_.ToReflectedMethod =
-      [](JNIEnv* /*env*/, jclass /*cls*/, jmethodID methodID,
-         jboolean /*isStatic*/) -> jobject {
+      [](JNIEnv* , jclass , jmethodID methodID,
+         jboolean ) -> jobject {
     return reinterpret_cast<jobject>(methodID);
   };
 
   native_interface_.ToReflectedField =
-      [](JNIEnv* /*env*/, jclass /*cls*/, jfieldID fieldID,
-         jboolean /*isStatic*/) -> jobject {
+      [](JNIEnv* , jclass , jfieldID fieldID,
+         jboolean ) -> jobject {
     return reinterpret_cast<jobject>(fieldID);
   };
 
@@ -6809,7 +6787,7 @@ void VM::InitJNIFunctionTables() {
   native_interface_.CallDoubleMethodV = JniZeroDoubleV;
   native_interface_.CallDoubleMethodA = JniZeroDoubleA;
   native_interface_.GetStaticObjectField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID fieldID) -> jobject {
+      [](JNIEnv* , jclass , jfieldID fieldID) -> jobject {
     if (TraceEnabled()) {
       auto* name = reinterpret_cast<const char*>(fieldID);
       std::cout << "  [JNI] GetStaticObjectField: "
@@ -6836,40 +6814,40 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetStaticBooleanField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jboolean {
+      [](JNIEnv* , jclass , jfieldID ) -> jboolean {
     return JNI_FALSE;
   };
   native_interface_.GetStaticByteField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jbyte {
+      [](JNIEnv* , jclass , jfieldID ) -> jbyte {
     return 0;
   };
   native_interface_.GetStaticCharField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jchar {
+      [](JNIEnv* , jclass , jfieldID ) -> jchar {
     return 0;
   };
   native_interface_.GetStaticShortField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jshort {
+      [](JNIEnv* , jclass , jfieldID ) -> jshort {
     return 0;
   };
   native_interface_.GetStaticIntField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jint {
+      [](JNIEnv* , jclass , jfieldID ) -> jint {
     return 0;
   };
   native_interface_.GetStaticLongField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jlong {
+      [](JNIEnv* , jclass , jfieldID ) -> jlong {
     return 0;
   };
   native_interface_.GetStaticFloatField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jfloat {
+      [](JNIEnv* , jclass , jfieldID ) -> jfloat {
     return 0.0f;
   };
   native_interface_.GetStaticDoubleField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/) -> jdouble {
+      [](JNIEnv* , jclass , jfieldID ) -> jdouble {
     return 0.0;
   };
 
   native_interface_.SetStaticObjectField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID fieldID,
+      [](JNIEnv* , jclass , jfieldID fieldID,
          jobject value) {
     auto* name = reinterpret_cast<const char*>(fieldID);
     if (!name) {
@@ -6886,29 +6864,29 @@ void VM::InitJNIFunctionTables() {
     }
   };
   native_interface_.SetStaticBooleanField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jboolean /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jboolean ) {};
   native_interface_.SetStaticByteField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jbyte /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jbyte ) {};
   native_interface_.SetStaticCharField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jchar /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jchar ) {};
   native_interface_.SetStaticShortField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jshort /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jshort ) {};
   native_interface_.SetStaticIntField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jint /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jint ) {};
   native_interface_.SetStaticLongField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jlong /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jlong ) {};
   native_interface_.SetStaticFloatField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jfloat /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jfloat ) {};
   native_interface_.SetStaticDoubleField =
-      [](JNIEnv* /*env*/, jclass /*clazz*/, jfieldID /*fieldID*/,
-         jdouble /*value*/) {};
+      [](JNIEnv* , jclass , jfieldID ,
+         jdouble ) {};
 
   native_interface_.GetObjectField =
       [](JNIEnv* env, jobject obj, jfieldID fieldID) -> jobject {
@@ -6921,45 +6899,45 @@ void VM::InitJNIFunctionTables() {
     return env != nullptr && value != nullptr ? env->NewLocalRef(value) : value;
   };
   native_interface_.GetBooleanField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID) -> jboolean {
+      [](JNIEnv* , jobject obj, jfieldID fieldID) -> jboolean {
     return BooleanFieldValue(obj, reinterpret_cast<const char*>(fieldID));
   };
   native_interface_.GetByteField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/) -> jbyte {
+      [](JNIEnv* , jobject , jfieldID ) -> jbyte {
     return 0;
   };
   native_interface_.GetCharField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/) -> jchar {
+      [](JNIEnv* , jobject , jfieldID ) -> jchar {
     return 0;
   };
   native_interface_.GetShortField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/) -> jshort {
+      [](JNIEnv* , jobject , jfieldID ) -> jshort {
     return 0;
   };
   native_interface_.GetIntField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID) -> jint {
+      [](JNIEnv* , jobject obj, jfieldID fieldID) -> jint {
     return IntFieldValue(obj, reinterpret_cast<const char*>(fieldID));
   };
   native_interface_.GetLongField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID) -> jlong {
+      [](JNIEnv* , jobject obj, jfieldID fieldID) -> jlong {
     return LongFieldValue(obj, reinterpret_cast<const char*>(fieldID));
   };
   native_interface_.GetFloatField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID) -> jfloat {
+      [](JNIEnv* , jobject obj, jfieldID fieldID) -> jfloat {
     return FloatFieldValue(obj, reinterpret_cast<const char*>(fieldID));
   };
   native_interface_.GetDoubleField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/) -> jdouble {
+      [](JNIEnv* , jobject , jfieldID ) -> jdouble {
     return 0.0;
   };
 
   native_interface_.SetObjectField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID,
+      [](JNIEnv* , jobject obj, jfieldID fieldID,
          jobject val) {
     SetObjectFieldRaw(obj, reinterpret_cast<const char*>(fieldID), val);
   };
   native_interface_.SetBooleanField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID,
+      [](JNIEnv* , jobject obj, jfieldID fieldID,
          jboolean val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
     auto* native_object = NativeObjectFromRef(obj);
@@ -6968,13 +6946,13 @@ void VM::InitJNIFunctionTables() {
     }
   };
   native_interface_.SetByteField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jbyte /*val*/) {};
+      [](JNIEnv* , jobject , jfieldID , jbyte ) {};
   native_interface_.SetCharField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jchar /*val*/) {};
+      [](JNIEnv* , jobject , jfieldID , jchar ) {};
   native_interface_.SetShortField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jshort /*val*/) {};
+      [](JNIEnv* , jobject , jfieldID , jshort ) {};
   native_interface_.SetIntField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jint val) {
+      [](JNIEnv* , jobject obj, jfieldID fieldID, jint val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
     auto* native_object = NativeObjectFromRef(obj);
     if (native_object && name) {
@@ -6982,11 +6960,11 @@ void VM::InitJNIFunctionTables() {
     }
   };
   native_interface_.SetLongField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jlong val) {
+      [](JNIEnv* , jobject obj, jfieldID fieldID, jlong val) {
     SetLongFieldRaw(obj, reinterpret_cast<const char*>(fieldID), val);
   };
   native_interface_.SetFloatField =
-      [](JNIEnv* /*env*/, jobject obj, jfieldID fieldID, jfloat val) {
+      [](JNIEnv* , jobject obj, jfieldID fieldID, jfloat val) {
     auto* name = reinterpret_cast<const char*>(fieldID);
     auto* native_object = NativeObjectFromRef(obj);
     if (native_object && name) {
@@ -6994,21 +6972,21 @@ void VM::InitJNIFunctionTables() {
     }
   };
   native_interface_.SetDoubleField =
-      [](JNIEnv* /*env*/, jobject /*obj*/, jfieldID /*fieldID*/, jdouble /*val*/) {};
+      [](JNIEnv* , jobject , jfieldID , jdouble ) {};
 
   native_interface_.NewGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jobject {
+      [](JNIEnv* , jobject obj) -> jobject {
     RetainJniReference(obj);
     return obj;
   };
 
   native_interface_.DeleteGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) {
+      [](JNIEnv* , jobject obj) {
     ReleaseJniReference(obj);
   };
 
   native_interface_.NewLocalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jobject {
+      [](JNIEnv* , jobject obj) -> jobject {
     if (obj != nullptr) {
       RetainJniReference(obj);
       RegisterLocalRef(obj);
@@ -7017,59 +6995,59 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.DeleteLocalRef =
-      [](JNIEnv* /*env*/, jobject obj) {
+      [](JNIEnv* , jobject obj) {
     UnregisterLocalRef(obj);
     ReleaseJniReference(obj);
   };
 
   native_interface_.NewWeakGlobalRef =
-      [](JNIEnv* /*env*/, jobject obj) -> jweak {
+      [](JNIEnv* , jobject obj) -> jweak {
     Trace("NewWeakGlobalRef");
     RetainJniReference(obj);
     return reinterpret_cast<jweak>(obj);
   };
 
   native_interface_.DeleteWeakGlobalRef =
-      [](JNIEnv* /*env*/, jweak ref) {
+      [](JNIEnv* , jweak ref) {
     ReleaseJniReference(ref);
   };
 
   native_interface_.GetObjectRefType =
-      [](JNIEnv* /*env*/, jobject obj) -> jobjectRefType {
+      [](JNIEnv* , jobject obj) -> jobjectRefType {
     return obj ? JNILocalRefType : JNIInvalidRefType;
   };
 
   native_interface_.NewString =
-      [](JNIEnv* /*env*/, const jchar* unicode, jsize len) -> jstring {
+      [](JNIEnv* , const jchar* unicode, jsize len) -> jstring {
     return MakeUtf16String(unicode, len);
   };
 
   native_interface_.GetStringLength =
-      [](JNIEnv* /*env*/, jstring str) -> jsize {
+      [](JNIEnv* , jstring str) -> jsize {
     return StringUtf16Length(str);
   };
 
   native_interface_.GetStringChars =
-      [](JNIEnv* /*env*/, jstring str, jboolean* isCopy) -> const jchar* {
+      [](JNIEnv* , jstring str, jboolean* isCopy) -> const jchar* {
     if (isCopy) *isCopy = JNI_FALSE;
     return StringUtf16Chars(str);
   };
 
   native_interface_.ReleaseStringChars =
-      [](JNIEnv* /*env*/, jstring /*str*/, const jchar* /*chars*/) {};
+      [](JNIEnv* , jstring , const jchar* ) {};
 
   native_interface_.GetStringUTFRegion =
-      [](JNIEnv* /*env*/, jstring str, jsize start, jsize len, char* buf) {
+      [](JNIEnv* , jstring str, jsize start, jsize len, char* buf) {
     CopyStringModifiedUtf8Region(str, start, len, buf);
   };
 
   native_interface_.GetStringRegion =
-      [](JNIEnv* /*env*/, jstring str, jsize start, jsize len, jchar* buf) {
+      [](JNIEnv* , jstring str, jsize start, jsize len, jchar* buf) {
     CopyStringRegion(str, start, len, buf);
   };
 
   native_interface_.GetArrayLength =
-      [](JNIEnv* /*env*/, jarray array) -> jsize {
+      [](JNIEnv* , jarray array) -> jsize {
     PseudoArray* pseudo_array = ArrayFromRef(array);
     if (!pseudo_array) {
       return 0;
@@ -7084,7 +7062,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.NewObjectArray =
-      [](JNIEnv* /*env*/, jsize len, jclass /*clazz*/,
+      [](JNIEnv* , jsize len, jclass ,
          jobject init) -> jobjectArray {
     Trace("NewObjectArray");
     return MakeObjectArray(len, init);
@@ -7119,13 +7097,13 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.NewByteArray =
-      [](JNIEnv* /*env*/, jsize len) -> jbyteArray {
+      [](JNIEnv* , jsize len) -> jbyteArray {
     Trace("NewByteArray");
     return MakeByteArray(len);
   };
 
   native_interface_.GetByteArrayElements =
-      [](JNIEnv* /*env*/, jbyteArray array, jboolean* isCopy) -> jbyte* {
+      [](JNIEnv* , jbyteArray array, jboolean* isCopy) -> jbyte* {
     if (isCopy) *isCopy = JNI_FALSE;
     PseudoArray* pseudo_array = ArrayFromRef(array);
     return pseudo_array && !pseudo_array->bytes.empty()
@@ -7134,17 +7112,17 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.ReleaseByteArrayElements =
-      [](JNIEnv* /*env*/, jbyteArray /*array*/, jbyte* /*elems*/,
-         jint /*mode*/) {};
+      [](JNIEnv* , jbyteArray , jbyte* ,
+         jint ) {};
 
   native_interface_.NewFloatArray =
-      [](JNIEnv* /*env*/, jsize len) -> jfloatArray {
+      [](JNIEnv* , jsize len) -> jfloatArray {
     Trace("NewFloatArray");
     return MakeFloatArray(len);
   };
 
   native_interface_.GetFloatArrayElements =
-      [](JNIEnv* /*env*/, jfloatArray array, jboolean* isCopy) -> jfloat* {
+      [](JNIEnv* , jfloatArray array, jboolean* isCopy) -> jfloat* {
     if (isCopy) *isCopy = JNI_FALSE;
     PseudoArray* pseudo_array = ArrayFromRef(array);
     return pseudo_array && !pseudo_array->floats.empty()
@@ -7153,11 +7131,11 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.ReleaseFloatArrayElements =
-      [](JNIEnv* /*env*/, jfloatArray /*array*/, jfloat* /*elems*/,
-         jint /*mode*/) {};
+      [](JNIEnv* , jfloatArray , jfloat* ,
+         jint ) {};
 
   native_interface_.GetByteArrayRegion =
-      [](JNIEnv* /*env*/, jbyteArray array, jsize start, jsize len, jbyte* buf) {
+      [](JNIEnv* , jbyteArray array, jsize start, jsize len, jbyte* buf) {
     PseudoArray* pseudo_array = ArrayFromRef(array);
     if (!pseudo_array || !buf || start < 0 || len <= 0) {
       return;
@@ -7173,7 +7151,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.SetByteArrayRegion =
-      [](JNIEnv* /*env*/, jbyteArray array, jsize start, jsize len,
+      [](JNIEnv* , jbyteArray array, jsize start, jsize len,
          const jbyte* buf) {
     PseudoArray* pseudo_array = ArrayFromRef(array);
     if (!pseudo_array || !buf || start < 0 || len <= 0) {
@@ -7190,7 +7168,7 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.SetFloatArrayRegion =
-      [](JNIEnv* /*env*/, jfloatArray array, jsize start, jsize len,
+      [](JNIEnv* , jfloatArray array, jsize start, jsize len,
          const jfloat* buf) {
     PseudoArray* pseudo_array = ArrayFromRef(array);
     if (!pseudo_array || !buf || start < 0 || len <= 0) {
@@ -7222,9 +7200,9 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.ReleasePrimitiveArrayCritical =
-      [](JNIEnv* /*env*/, jarray /*array*/, void* /*carray*/, jint /*mode*/) {};
+      [](JNIEnv* , jarray , void* , jint ) {};
 
-  native_interface_.NewDirectByteBuffer = [](JNIEnv * /*env*/, void *address,
+  native_interface_.NewDirectByteBuffer = [](JNIEnv * , void *address,
                                              jlong capacity) -> jobject {
     if (address == nullptr || capacity < 0) {
       return nullptr;
@@ -7236,11 +7214,11 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.GetDirectBufferAddress =
-      [](JNIEnv* /*env*/, jobject buf) -> void* {
+      [](JNIEnv* , jobject buf) -> void* {
     return reinterpret_cast<void*>(buf);
   };
 
-  native_interface_.GetDirectBufferCapacity = [](JNIEnv * /*env*/,
+  native_interface_.GetDirectBufferCapacity = [](JNIEnv * ,
                                                  jobject buf) -> jlong {
     std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
     const auto found = g_direct_buffer_capacities.find(buf);
@@ -7248,12 +7226,12 @@ void VM::InitJNIFunctionTables() {
   };
 
   native_interface_.MonitorEnter =
-      [](JNIEnv* /*env*/, jobject /*obj*/) -> jint {
+      [](JNIEnv* , jobject ) -> jint {
     return JNI_OK;
   };
 
   native_interface_.MonitorExit =
-      [](JNIEnv* /*env*/, jobject /*obj*/) -> jint {
+      [](JNIEnv* , jobject ) -> jint {
     return JNI_OK;
   };
 
@@ -7275,4 +7253,4 @@ void VM::InitJNIFunctionTables() {
   jni_env_->functions = &native_interface_;
 }
 
-}  // namespace jnivm
+}
