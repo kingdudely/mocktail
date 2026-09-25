@@ -10,22 +10,25 @@ include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
 # Mocktail implements its own pseudo-JVM. JNI is an API header surface here;
-# it does not need a host libjvm or AWT. Keep the headers vendored so building
-# Mocktail does not require a JDK installation.
+# it does not link against a host JVM. Prefer vendored headers when present,
+# otherwise use the JNI headers provided by an installed JDK.
 set(MOCKTAIL_JNI_INCLUDE_DIR
   ${CMAKE_SOURCE_DIR}/third_party/jni/include)
-set(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
-  ${CMAKE_SOURCE_DIR}/third_party/jni/include)
 
-if(NOT EXISTS "${MOCKTAIL_JNI_INCLUDE_DIR}/jni.h" OR
-   NOT EXISTS "${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR}/jni_md.h")
-  message(FATAL_ERROR
-    "Vendored JNI headers are missing under third_party/jni/include")
+if(EXISTS "${MOCKTAIL_JNI_INCLUDE_DIR}/jni.h")
+  set(MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR
+    ${MOCKTAIL_JNI_INCLUDE_DIR})
+  set(MOCKTAIL_JNI_INCLUDE_DIRS
+    ${MOCKTAIL_JNI_INCLUDE_DIR}
+    ${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR})
+else()
+  find_package(JNI QUIET)
+  if(NOT JNI_FOUND OR NOT JNI_INCLUDE_DIRS)
+    message(FATAL_ERROR
+      "JNI headers are missing. Install a JDK development package or provide third_party/jni/include")
+  endif()
+  set(MOCKTAIL_JNI_INCLUDE_DIRS ${JNI_INCLUDE_DIRS})
 endif()
-
-set(MOCKTAIL_JNI_INCLUDE_DIRS
-  ${MOCKTAIL_JNI_INCLUDE_DIR}
-  ${MOCKTAIL_JNI_PLATFORM_INCLUDE_DIR})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -271,7 +274,7 @@ target_link_options(roblox PRIVATE -Wl,--export-dynamic)
 set_target_properties(roblox PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
   BUILD_RPATH "\$ORIGIN;\$ORIGIN/build"
-  INSTALL_RPATH "\$ORIGIN;$ORIGIN/${CMAKE_INSTALL_LIBDIR}/mocktail")
+  INSTALL_RPATH "\$ORIGIN;\$ORIGIN/${CMAKE_INSTALL_LIBDIR}/mocktail")
 
 install(TARGETS roblox
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
