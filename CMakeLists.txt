@@ -70,6 +70,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+find_package(CURL REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 
@@ -114,6 +115,13 @@ target_link_libraries(mocktail_runtime PRIVATE
   ${CMAKE_DL_LIBS})
 mocktail_apply_compile_options(mocktail_runtime)
 add_library(Mocktail::Runtime ALIAS mocktail_runtime)
+
+add_library(mocktail_browser_auth STATIC
+  src/runtime/browser_auth.cc)
+target_include_directories(mocktail_browser_auth PUBLIC include)
+target_link_libraries(mocktail_browser_auth PUBLIC CURL::libcurl)
+mocktail_apply_compile_options(mocktail_browser_auth)
+add_library(Mocktail::BrowserAuth ALIAS mocktail_browser_auth)
 
 add_library(mocktail_auth_runtime_composition STATIC
   src/runtime/auth_runtime_composition.cc)
@@ -249,21 +257,22 @@ target_link_libraries(mocktail_legacy_runtime PRIVATE
   ${MOCKTAIL_EXECINFO_LINK_LIBRARY})
 mocktail_apply_compile_options(mocktail_legacy_runtime)
 
-add_executable(mocktail src/main.cc)
+add_executable(roblox src/main.cc)
 target_include_directories(mocktail PRIVATE include src)
 target_link_libraries(mocktail PRIVATE
   mocktail_legacy_runtime Mocktail::AuthRuntimeComposition
+  Mocktail::BrowserAuth
   mocktail_fmod_jni_audio_bridge
   mocktail_roblox_output_device_runtime
   mocktail_roblox_fullscreen_runtime
   mocktail_window libc_shim)
-mocktail_apply_compile_options(mocktail)
-target_link_options(mocktail PRIVATE -Wl,--export-dynamic)
-set_target_properties(mocktail PROPERTIES
+mocktail_apply_compile_options(roblox)
+target_link_options(roblox PRIVATE -Wl,--export-dynamic)
+set_target_properties(roblox PROPERTIES
   BUILD_RPATH "\$ORIGIN"
   INSTALL_RPATH "\$ORIGIN;$ORIGIN/${CMAKE_INSTALL_LIBDIR}/mocktail")
 
-install(TARGETS mocktail
+install(TARGETS roblox
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 install(FILES "${CMAKE_SOURCE_DIR}/mocktail.desktop"
