@@ -1,6 +1,8 @@
 #ifndef MOCKTAIL_RUNTIME_COMMAND_LINE_H_
 #define MOCKTAIL_RUNTIME_COMMAND_LINE_H_
 
+#include <cstdint>
+#include <optional>
 #include <string>
 
 namespace mocktail::runtime {
@@ -10,6 +12,10 @@ struct CommandLineOptions {
   std::string roblox_library_path = "./libroblox.so";
   std::string asset_path = "./assets";
   std::string roblosecurity;
+  std::string launch_uri;
+  std::string server_id;
+  std::optional<std::int64_t> place_id;
+  bool headless = false;
 };
 
 struct CommandLineParseResult {
