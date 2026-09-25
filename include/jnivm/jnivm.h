@@ -263,9 +263,6 @@ public:
   VM(const VM &) = delete;
   VM &operator=(const VM &) = delete;
 
-  // Repeated registration returns the existing class.
-  std::shared_ptr<Class> RegisterClass(const std::string &class_name);
-
   // Returns nullptr if the class has not been registered.
   std::shared_ptr<Class> FindClass(const std::string &class_name) const;
 
