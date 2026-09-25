@@ -1,61 +1,59 @@
 # Mocktail
 
-Minimal Linux launcher/runtime for a prepared Roblox Android payload.
+Minimal Linux Roblox compatibility runtime with a browser-first launcher.
 
-Provide `libroblox.so` and the Roblox assets directory yourself. Mocktail does
-not download or install the Roblox client.
-
-## Launch
-
-```sh
-./build/mocktail \
-  --libroblox_file ~/libroblox.so \
-  --assets_dir ~/assets \
-  --ROBLOSECURITY '<cookie>' \
-  --place-id 1818
-```
-
-For a specific server:
-
-```sh
-./build/mocktail \
-  --libroblox_file ~/libroblox.so \
-  --assets_dir ~/assets \
-  --ROBLOSECURITY '<cookie>' \
-  --place-id 1818 \
-  --server-id '<server-id>'
-```
-
-Headless mode keeps the launcher alive and pumps Roblox main-thread work:
-
-```sh
-./build/mocktail \
-  --libroblox_file ~/libroblox.so \
-  --assets_dir ~/assets \
-  --ROBLOSECURITY '<cookie>' \
-  --place-id 1818 \
-  --headless
-```
-
-Supported options:
+The executable is named `roblox`. Mocktail does not download Roblox. Put the
+prepared Roblox native library and assets beside the executable:
 
 ```text
---assets_dir <path>
---libroblox_file <path>
---ROBLOSECURITY <value>
---place-id <id>
---server-id <id>
---headless
+roblox
+libroblox.so
+assets/
 ```
 
-A single positional `roblox:` or `roblox-player:` URI is also accepted. That
-is the browser-launch path; the installed desktop entry registers both schemes
-with the desktop environment.
+## Launching from Roblox
 
-Browser launch parsing follows the URI shapes used by Mocktail/Cordial. The
-desktop `gameinfo` ticket is treated as an opaque one-use credential and is
-not forwarded or logged. The `.ROBLOSECURITY` value is kept in process memory
-only.
+The normal path is simply pressing **Play** on roblox.com.
+
+The desktop website launches a `roblox-player:` URI containing a one-use
+`gameinfo` authentication ticket and a PlaceLauncher URL. Mocktail handles
+that URI, redeems the ticket at Roblox's authentication-ticket endpoint, keeps
+the resulting `.ROBLOSECURITY` session only in memory, and then starts the
+Roblox runtime for the requested place/server.
+
+The one-use browser ticket is never written to disk or passed into the Roblox
+runtime after redemption.
+
+Both `roblox:` and `roblox-player:` are registered by the installed desktop
+entry, so the browser can invoke `roblox %u` directly.
+
+## Running it
+
+From a checkout:
+
+```sh
+./roblox
+```
+
+A browser URI can also be passed directly:
+
+```sh
+./roblox 'roblox-player:...'
+```
+
+For debugging without a window:
+
+```sh
+./roblox --headless
+```
+
+There are intentionally no place/server/cookie command-line options in the
+launcher. Browser launch data is the source of truth. A small shell script can
+construct a `roblox-player:` URI later when you need manual testing.
+
+The runtime uses `ROBLOX_LIB_PATH` and `MOCKTAIL_ASSET_PATH` internally. When
+those are not already set, they default to `libroblox.so` and `assets/` next
+to the `roblox` executable.
 
 ## Build
 
@@ -64,5 +62,11 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 ```
 
-The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, nlohmann-json,
-libelf, utf8proc, fontconfig, and a C++17 toolchain.
+The resulting executable is:
+
+```text
+build/roblox
+```
+
+The host needs SDL3, SDL3_ttf, Vulkan/EGL/GLES headers, OpenSSL, libcurl,
+nlohmann-json, libelf, utf8proc, fontconfig, and a C++17 toolchain.
