@@ -140,7 +140,10 @@ int main(int argc, char* argv[]) {
   if (setenv("ROBLOX_LIB_PATH", options.roblox_library_path.c_str(), 1) != 0 ||
       setenv("MOCKTAIL_ASSET_PATH", options.asset_path.c_str(), 1) != 0 ||
       setenv("MOCKTAIL_ASSET_ROOT", options.asset_path.c_str(), 1) != 0 ||
-      setenv("MOCKTAIL_HEADLESS", options.headless ? "1" : "0", 1) != 0) {
+      setenv("MOCKTAIL_HEADLESS", options.headless ? "1" : "0", 1) != 0 ||
+      (options.headless &&
+       (setenv("MOCKTAIL_KEEPALIVE", "1", 1) != 0 ||
+        setenv("MOCKTAIL_MAIN_THREAD_MESSAGE_PUMP", "1", 1) != 0))) {
     std::cerr << "could not set Roblox payload environment\n";
     return EXIT_FAILURE;
   }
