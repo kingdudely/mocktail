@@ -43,23 +43,8 @@ function(mocktail_apply_compile_options target_name)
   target_link_libraries(${target_name} PRIVATE mocktail_compile_options)
 endfunction()
 
-option(MOCKTAIL_ENABLE_UPSTREAM_JNIVM "Build upstream libjnivm" ON)
-if(MOCKTAIL_ENABLE_UPSTREAM_JNIVM)
-  set(JNIVM_ENABLE_TRACE OFF CACHE BOOL "" FORCE)
-  set(JNIVM_ENABLE_GC ON CACHE BOOL "" FORCE)
-  set(JNIVM_ENABLE_DEBUG OFF CACHE BOOL "" FORCE)
-  set(JNIVM_ENABLE_RETURN_NON_ZERO OFF CACHE BOOL "" FORCE)
-  set(JNIVM_FAKE_JNI_MINECRAFT_LINUX_COMPAT OFF CACHE BOOL "" FORCE)
-  set(JNIVM_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-  set(JNIVM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-
-  add_subdirectory(third_party/libjnivm EXCLUDE_FROM_ALL)
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_include_directories(jnivm PRIVATE ${MOCKTAIL_JNI_INCLUDE_DIRS})
-    target_compile_options(jnivm PRIVATE -include string)
-  endif()
-  target_link_libraries(jnivm PUBLIC Threads::Threads)
-endif()
+# Mocktail uses its in-tree JNI compatibility layer in src/jnivm/jnivm.cc.
+# No external libjnivm build is required.
 
 add_subdirectory(third_party/mcpelauncher-linker)
 
