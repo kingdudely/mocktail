@@ -38,7 +38,6 @@ struct LaunchFields {
   std::string join_attempt_id;
   std::string join_attempt_origin;
   std::string iso_context;
-  std::string authentication_ticket;
   std::set<std::string> seen_fields;
 };
 
