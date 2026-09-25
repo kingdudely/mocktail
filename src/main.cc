@@ -5,7 +5,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include <unistd.h>
 #include <utility>
 
 #include "legacy/legacy_runtime.h"
@@ -40,16 +39,6 @@ void ScrubArgv(int argc, char* argv[]) {
   }
 }
 
-std::filesystem::path ExecutableDirectory() {
-  char buffer[4096] = {};
-  const ssize_t length = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
-  if (length > 0) {
-    buffer[length] = '\0';
-    return std::filesystem::path(buffer).parent_path();
-  }
-  return std::filesystem::current_path();
-}
-
 std::filesystem::path ExpandUserPath(const std::string& value) {
   if (value == "~" || value.rfind("~/", 0) == 0) {
     const char* home = std::getenv("HOME");
@@ -63,15 +52,10 @@ std::filesystem::path ExpandUserPath(const std::string& value) {
 
 bool SetPayloadEnvironment(
     const mocktail::runtime::CommandLineOptions& options) {
-  const std::filesystem::path root = ExecutableDirectory();
   const std::filesystem::path library =
-      options.roblox_library_path.empty()
-          ? root / "libroblox.so"
-          : ExpandUserPath(options.roblox_library_path);
+      ExpandUserPath(options.roblox_library_path);
   const std::filesystem::path assets =
-      options.asset_path.empty()
-          ? root / "assets"
-          : ExpandUserPath(options.asset_path);
+      ExpandUserPath(options.asset_path);
 
   auto set_default = [](const char* name, const std::string& value) {
     return std::getenv(name) != nullptr ||
