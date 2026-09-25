@@ -2499,122 +2499,101 @@ jobject AndroidObjectForMethod(const char* name) {
 }
 
 jobject ObjectResultForReceiverMethod(jobject obj, const char* name) {
-  if (!name) {
-    return nullptr;
+  if (!name) return nullptr;
+
+  struct FieldFallback {
+    const char* method;
+    const char* field;
+    const char* class_name;
+  };
+  static constexpr FieldFallback kFrameworkObjects[] = {
+      {"getApplicationContext", "applicationContext", "android/app/Application"},
+      {"getBaseContext", "baseContext", "android/content/Context"},
+      {"getContext", "context", "android/content/Context"},
+      {"getAssets", "assetManager", "android/content/res/AssetManager"},
+      {"getResources", "resources", "android/content/res/Resources"},
+      {"getClassLoader", "classLoader", "java/lang/ClassLoader"},
+      {"getPackageManager", "packageManager",
+       "android/content/pm/PackageManager"},
+      {"getApplicationInfo", "applicationInfo", nullptr},
+      {"getPackageInfo", "packageInfo", nullptr},
+      {"getWindow", "window", "android/view/Window"},
+      {"getWindowManager", "windowManager", "android/view/WindowManager"},
+      {"getDefaultDisplay", "defaultDisplay", "android/view/Display"},
+      {"getDisplay", "display", "android/view/Display"},
+      {"getDecorView", "decorView", "android/view/View"},
+      {"getRootView", "rootView", "android/view/View"},
+      {"getHolder", "holder", "android/view/SurfaceHolder"},
+      {"getSurface", "surface", "android/view/Surface"},
+      {"edit", "editor", "android/content/SharedPreferences$Editor"},
+  };
+
+  static constexpr std::pair<const char*, const char*> kConstantStrings[] = {
+      {"getBaseUrl", "https://www.roblox.com"},
+      {"getBaseURL", "https://www.roblox.com"},
+      {"getWwwBaseUrl", "https://www.roblox.com"},
+      {"getWWWBaseUrl", "https://www.roblox.com"},
+      {"getApiBaseUrl", "https://apis.roblox.com"},
+      {"getApiGatewayUrl", "https://apis.roblox.com"},
+      {"getSettingsUrl",
+       "https://clientsettingscdn.roblox.com/v2/settings-compressed/"
+       "application/AndroidApp.zst"},
+      {"getClientSettingsUrl",
+       "https://clientsettingscdn.roblox.com/v2/settings-compressed/"
+       "application/AndroidApp.zst"},
+  };
+  for (const auto& entry : kConstantStrings) {
+    if (std::strcmp(name, entry.first) == 0) {
+      return MakeString(entry.second);
+    }
   }
-  EnsureAndroidObjectGraph();
-  if (std::strcmp(name, "getBaseUrl") == 0 ||
-      std::strcmp(name, "getBaseURL") == 0 ||
-      std::strcmp(name, "getWwwBaseUrl") == 0 ||
-      std::strcmp(name, "getWWWBaseUrl") == 0) {
-    return MakeString("https://www.roblox.com");
+
+  for (const auto& entry : kFrameworkObjects) {
+    if (std::strcmp(name, entry.method) != 0) continue;
+    if (jobject value = ObjectFieldValue(obj, entry.field)) return value;
+    if (entry.class_name != nullptr) return SingletonObject(entry.class_name);
+    if (std::strcmp(entry.method, "getApplicationInfo") == 0) {
+      return MakeApplicationInfoObject();
+    }
+    if (std::strcmp(entry.method, "getPackageInfo") == 0) {
+      return MakePackageInfoObject();
+    }
   }
-  if (std::strcmp(name, "getApiBaseUrl") == 0 ||
-      std::strcmp(name, "getApiGatewayUrl") == 0) {
-    return MakeString("https://apis.roblox.com");
-  }
-  if (std::strcmp(name, "getSettingsUrl") == 0 ||
-      std::strcmp(name, "getClientSettingsUrl") == 0) {
-    return MakeString(
-        "https://clientsettingscdn.roblox.com/v2/settings-compressed/"
-        "application/AndroidApp.zst");
-  }
-  if (std::strcmp(name, "getApplicationContext") == 0) {
-    jobject value = ObjectFieldValue(obj, "applicationContext");
-    return value ? value : SingletonObject("android/app/Application");
-  }
+
   if (std::strcmp(name, "getNativeHelper") == 0) {
     jobject value = ObjectFieldValue(obj, "nativeHelper");
-    if (!value) {
-      value = ObjectFieldValue(obj, "H");
-    }
+    if (!value) value = ObjectFieldValue(obj, "H");
     if (!value) {
       value = MakeNativeHelperObject(obj);
       SetObjectFieldRaw(obj, "nativeHelper", value);
       SetObjectFieldRaw(obj, "H", value);
-    } else if (obj) {
+    } else {
       SetObjectFieldRaw(value, "activity", obj);
       SetObjectFieldRaw(value, "a", obj);
     }
     return value;
   }
-  if (std::strcmp(name, "getBaseContext") == 0 ||
-      std::strcmp(name, "getContext") == 0) {
-    jobject value = ObjectFieldValue(obj, "baseContext");
-    return value ? value : SingletonObject("android/content/Context");
+
+  if (std::strcmp(name, "getString") == 0) {
+    return MakeString("");
   }
-  if (std::strcmp(name, "getAssets") == 0) {
-    jobject value = ObjectFieldValue(obj, "assetManager");
-    return value ? value : SingletonObject("android/content/res/AssetManager");
+  if (std::strcmp(name, "getProperty") == 0) {
+    return MakeString("");
   }
-  if (std::strcmp(name, "getResources") == 0) {
-    jobject value = ObjectFieldValue(obj, "resources");
-    return value ? value : SingletonObject("android/content/res/Resources");
+  if (std::strcmp(name, "getSystemService") == 0) {
+    return nullptr;  // ObjectResultForMethodV handles the service argument.
   }
-  if (std::strcmp(name, "getClassLoader") == 0) {
-    jobject value = ObjectFieldValue(obj, "classLoader");
-    return value ? value : SingletonObject("java/lang/ClassLoader");
+  if (std::strcmp(name, "loadClass") == 0 ||
+      std::strcmp(name, "findClass") == 0 ||
+      std::strcmp(name, "forName") == 0) {
+    return SingletonObject("java/lang/Class");
   }
-  if (std::strcmp(name, "getPackageManager") == 0) {
-    jobject value = ObjectFieldValue(obj, "packageManager");
-    return value ? value : SingletonObject("android/content/pm/PackageManager");
-  }
-  if (std::strcmp(name, "getApplicationInfo") == 0) {
-    jobject value = ObjectFieldValue(obj, "applicationInfo");
-    return value ? value : MakeApplicationInfoObject();
-  }
-  if (std::strcmp(name, "getPackageInfo") == 0) {
-    jobject value = ObjectFieldValue(obj, "packageInfo");
-    return value ? value : MakePackageInfoObject();
-  }
-  if (std::strcmp(name, "getWindow") == 0) {
-    jobject value = ObjectFieldValue(obj, "window");
-    return value ? value : SingletonObject("android/view/Window");
-  }
-  if (std::strcmp(name, "getWindowManager") == 0) {
-    jobject value = ObjectFieldValue(obj, "windowManager");
-    return value ? value : SingletonObject("android/view/WindowManager");
-  }
-  if (std::strcmp(name, "getDefaultDisplay") == 0) {
-    jobject value = ObjectFieldValue(obj, "defaultDisplay");
-    return value ? value : SingletonObject("android/view/Display");
-  }
-  if (std::strcmp(name, "getDisplay") == 0) {
-    jobject value = ObjectFieldValue(obj, "display");
-    return value ? value : SingletonObject("android/view/Display");
-  }
-  if (std::strcmp(name, "getDecorView") == 0 ||
-      std::strcmp(name, "getRootView") == 0) {
-    jobject value = ObjectFieldValue(obj, "decorView");
-    if (!value) {
-      value = ObjectFieldValue(obj, "rootView");
-    }
-    return value ? value : SingletonObject("android/view/View");
-  }
-  if (std::strcmp(name, "getHolder") == 0) {
-    jobject value = ObjectFieldValue(obj, "holder");
-    return value ? value : SingletonObject("android/view/SurfaceHolder");
-  }
-  if (std::strcmp(name, "getSurface") == 0) {
-    jobject value = ObjectFieldValue(obj, "surface");
-    return value ? value : SingletonObject("android/view/Surface");
-  }
-  if (std::strcmp(name, "edit") == 0) {
-    jobject value = ObjectFieldValue(obj, "editor");
-    return value ? value
-                 : SingletonObject("android/content/SharedPreferences$Editor");
-  }
-  if (jobject value = ObjectFieldValue(obj, name)) {
-    return value;
-  }
-  std::string field_name = GetterFieldName(name);
-  if (!field_name.empty()) {
-    if (jobject value = ObjectFieldValue(obj, field_name.c_str())) {
-      return value;
-    }
-  }
-  return nullptr;
+  if (jobject value = ObjectFieldValue(obj, name)) return value;
+  const std::string field_name = GetterFieldName(name);
+  return field_name.empty() ? nullptr
+                            : ObjectFieldValue(obj, field_name.c_str());
 }
+
 
 jobject ClassObjectForName(const std::string& requested_name) {
   std::string class_name = requested_name;
@@ -3794,10 +3773,8 @@ jobjectArray MakeObjectArray(jsize len, jobject init) {
 jobject StaticObjectResultForMethod(jmethodID method_id) {
   const char* name = MethodName(method_id);
   const PlatformIdentity identity = CurrentPlatformIdentity();
-  jobject android_object = AndroidObjectForMethod(name);
-  if (android_object) {
-    return android_object;
-  }
+  if (jobject object = AndroidObjectForMethod(name)) return object;
+
   if (std::strcmp(name, "getLocale") == 0 ||
       std::strcmp(name, "getRobloxLocale") == 0 ||
       std::strcmp(name, "getGameLocale") == 0) {
@@ -3811,8 +3788,46 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
       std::strcmp(name, "getAlternateName") == 0) {
     return MakeString(RobloxIdentityForJava().display_name.c_str());
   }
-  if (std::strcmp(name, "getPlatformName") == 0) {
-    return MakeString(identity.platform_name.c_str());
+
+  struct IdentityString {
+    const char* name;
+    const char* value;
+  };
+  const IdentityString fixed[] = {
+      {"getPlatformName", identity.platform_name.c_str()},
+      {"getDevice", identity.device_code.c_str()},
+      {"getProduct", identity.device_code.c_str()},
+      {"getBrand", identity.brand.c_str()},
+      {"getDeviceModel", identity.model.c_str()},
+      {"getModel", identity.model.c_str()},
+      {"getBuildId", "MOCKTAIL"},
+      {"getBuildType", "user"},
+      {"getBuildRelease", "13"},
+      {"getDeviceManufacturer", identity.manufacturer.c_str()},
+      {"getManufacturer", identity.manufacturer.c_str()},
+      {"getPackageName", "com.roblox.client"},
+      {"getInstallerPackageName", "com.android.vending"},
+      {"getAbsolutePath", "/data/user/0/com.roblox.client/files"},
+      {"getCanonicalPath", "/data/user/0/com.roblox.client/files"},
+      {"getPath", "/data/user/0/com.roblox.client/files"},
+      {"getString", ""},
+      {"optString", ""},
+      {"getProperty", ""},
+      {"getFilesDir", "/data/user/0/com.roblox.client/files"},
+      {"getPublicIPv4Addresseses", "127.0.0.1"},
+      {"getText", ""},
+      {"getCurrentText", ""},
+      {"getPlaceholder", ""},
+      {"getHint", ""},
+      {"getLastRaw", ""},
+  };
+  for (const auto& entry : fixed) {
+    if (std::strcmp(name, entry.name) == 0) return MakeString(entry.value);
+  }
+
+  if (std::strcmp(name, "getApiBaseUrl") == 0 ||
+      std::strcmp(name, "getApiGatewayUrl") == 0) {
+    return MakeString("https://apis.roblox.com");
   }
   if (std::strcmp(name, "getBaseUrl") == 0 ||
       std::strcmp(name, "getBaseURL") == 0 ||
@@ -3820,75 +3835,21 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
       std::strcmp(name, "getWWWBaseUrl") == 0) {
     return MakeString("https://www.roblox.com");
   }
-  if (std::strcmp(name, "getApiBaseUrl") == 0 ||
-      std::strcmp(name, "getApiGatewayUrl") == 0) {
-    return MakeString("https://apis.roblox.com");
-  }
   if (std::strcmp(name, "getSettingsUrl") == 0 ||
       std::strcmp(name, "getClientSettingsUrl") == 0) {
     return MakeString(
         "https://clientsettingscdn.roblox.com/v2/settings-compressed/"
         "application/AndroidApp.zst");
   }
-  if (std::strcmp(name, "getDevice") == 0) {
-    return MakeString(identity.device_code.c_str());
-  }
-  if (std::strcmp(name, "getBrand") == 0) {
-    return MakeString(identity.brand.c_str());
-  }
-  if (std::strcmp(name, "getDeviceModel") == 0 ||
-      std::strcmp(name, "getModel") == 0) {
-    return MakeString(identity.model.c_str());
-  }
-  if (std::strcmp(name, "getProduct") == 0) {
-    return MakeString(identity.device_code.c_str());
-  }
-  if (std::strcmp(name, "getBuildId") == 0) {
-    return MakeString("MOCKTAIL");
-  }
-  if (std::strcmp(name, "getBuildType") == 0) {
-    return MakeString("user");
-  }
-  if (std::strcmp(name, "getBuildRelease") == 0) {
-    return MakeString("13");
-  }
-  if (std::strcmp(name, "getDeviceManufacturer") == 0 ||
-      std::strcmp(name, "getManufacturer") == 0) {
-    return MakeString(identity.manufacturer.c_str());
-  }
-  if (std::strcmp(name, "getPackageName") == 0) {
-    return MakeString("com.roblox.client");
-  }
-  if (std::strcmp(name, "getInstallerPackageName") == 0) {
-    return MakeString("com.android.vending");
-  }
-  if (std::strcmp(name, "getAbsolutePath") == 0 ||
-      std::strcmp(name, "getCanonicalPath") == 0 ||
-      std::strcmp(name, "getPath") == 0) {
-    return MakeString("/data/user/0/com.roblox.client/files");
-  }
-  if (std::strcmp(name, "getString") == 0 ||
-      std::strcmp(name, "optString") == 0) {
-    return MakeString("");
-  }
-  if (std::strcmp(name, "getProperty") == 0) {
-    return MakeString("");
-  }
   if (std::strcmp(name, "getTheme") == 0) {
     return MakeString(ResolvedDarkTheme() ? "Dark" : "Light");
   }
-  if (std::strcmp(name, "getFilesDir") == 0) {
-    return MakeString("/data/user/0/com.roblox.client/files");
-  }
   if (std::strcmp(name, "getAppVersion") == 0) {
-    const char* app_version = std::getenv("MOCKTAIL_ROBLOX_VERSION");
-    return MakeString(app_version != nullptr ? app_version : "unknown");
+    const char* version = std::getenv("MOCKTAIL_ROBLOX_VERSION");
+    return MakeString(version ? version : "unknown");
   }
   if (std::strcmp(name, "getLastLoggedInUserId") == 0) {
     return MakeString(std::to_string(RobloxIdentityForJava().user_id).c_str());
-  }
-  if (std::strcmp(name, "getPublicIPv4Addresseses") == 0) {
-    return MakeString("127.0.0.1");
   }
   if (std::strcmp(name, "getVideoCodecs") == 0) {
     return MakeObjectArray(0, nullptr);
@@ -3906,13 +3867,6 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
       std::strcmp(name, "nativeGetTextBoxInfo") == 0) {
     return MakeNativeTextBoxInfoObject();
   }
-  if (std::strcmp(name, "getText") == 0 ||
-      std::strcmp(name, "getCurrentText") == 0 ||
-      std::strcmp(name, "getPlaceholder") == 0 ||
-      std::strcmp(name, "getHint") == 0 ||
-      std::strcmp(name, "getLastRaw") == 0) {
-    return MakeString("");
-  }
   if (std::strcmp(name, "getMessageBus") == 0 ||
       std::strcmp(name, "getMessageBusConnection") == 0 ||
       std::strcmp(name, "connect") == 0 ||
@@ -3925,6 +3879,7 @@ jobject StaticObjectResultForMethod(jmethodID method_id) {
   }
   return nullptr;
 }
+
 
 jobject ObjectResultForMethod(jmethodID method_id) {
   const char* name = MethodName(method_id);
