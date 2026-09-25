@@ -6141,10 +6141,10 @@ void VM::RestoreFunctions() {
   }
 }
 
-std::shared_ptr<Class> VM::FindClass(const std::string& class_name) const {
+
   std::lock_guard<std::recursive_mutex> lock(g_jni_state_mutex);
-  auto it = class_registry_.find(class_name);
-  if (it == class_registry_.end()) {
+  auto it = g_fallback_classes.find(class_name);
+  if (it == g_fallback_classes.end()) {
     return nullptr;
   }
   return it->second;
